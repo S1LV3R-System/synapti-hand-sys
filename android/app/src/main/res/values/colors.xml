@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- SynaptiHand Brand Colors -->
+
+    <!-- Primary Colors (from logo) -->
+    <color name="synaptihand_cyan">#4DC9E6</color>
+    <color name="synaptihand_teal">#1E90B5</color>
+    <color name="synaptihand_navy">#1B3A5F</color>
+    <color name="synaptihand_blue">#3498DB</color>
+
+    <!-- Node Colors (from logo neural network) -->
+    <color name="node_dark">#1A2744</color>
+    <color name="node_light">#50A0D0</color>
+
+    <!-- Gradient Colors for Adaptive Icon Background -->
+    <color name="ic_launcher_background_start">#4DC9E6</color>
+    <color name="ic_launcher_background_end">#1E90B5</color>
+    <color name="ic_launcher_background">#FFFFFF</color>
+
+    <!-- Legacy Colors (for compatibility) -->
+    <color name="primary">#1E90B5</color>
+    <color name="primary_dark">#1B3A5F</color>
+    <color name="accent">#4DC9E6</color>
+
+    <!-- Status Bar -->
+    <color name="status_bar_color">#1B3A5F</color>
+
+    <!-- Backgrounds -->
+    <color name="background_white">#FFFFFF</color>
+    <color name="background_light">#FAFAFA</color>
+    <color name="surface">#F5F5F5</color>
+
+    <!-- Text Colors -->
+    <color name="text_primary">#1B3A5F</color>
+    <color name="text_secondary">#666666</color>
+    <color name="text_hint">#999999</color>
+    <color name="text_on_primary">#FFFFFF</color>
+
+    <!-- Semantic Colors -->
+    <color name="success">#00C48C</color>
+    <color name="warning">#F5A623</color>
+    <color name="error">#EE0000</color>
+    <color name="info">#4DC9E6</color>
+</resources>

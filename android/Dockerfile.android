@@ -1,0 +1,19 @@
+FROM mobiledevops/android-sdk-image:34.0.0-jdk17
+
+WORKDIR /project
+
+# Install specific build tools if needed
+
+
+USER root
+
+
+RUN curl -L https://services.gradle.org/distributions/gradle-8.5-bin.zip -o /tmp/gradle-8.5-bin.zip \
+    && unzip -d /opt/gradle /tmp/gradle-8.5-bin.zip \
+    && ln -s /opt/gradle/gradle-8.5/bin/gradle /usr/bin/gradle
+
+
+
+
+
+# usage: docker run --rm -v $(pwd):/project handpose-android-builder ./gradlew assembleDebug

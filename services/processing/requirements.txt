@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+google-cloud-storage
+google-cloud-pubsub
+pandas
+numpy
+opencv-python-headless
+pydantic
+python-dotenv
+celery
+redis

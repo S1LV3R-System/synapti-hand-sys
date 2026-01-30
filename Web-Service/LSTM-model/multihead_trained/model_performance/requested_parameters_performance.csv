@@ -1,0 +1,18 @@
+Category,Parameter,F1-Score (%),Test Samples
+WRIST,Rotation-Out,100.0,100
+WRIST,Rotation-In,100.0,97
+FINGER,Thumb Tap,92.5,15
+FINGER,Thumb Lift,91.5,13
+FINGER,Index Tap,90.0,12
+FINGER,Index Lift,87.4,12
+FINGER,Middle Tap,87.4,10
+FINGER,Middle Lift,85.0,11
+FINGER,Ring Tap,89.0,11
+FINGER,Ring Lift,86.4,10
+FINGER,Pinky Tap,85.0,8
+FINGER,Pinky Lift,82.4,9
+POSTURE,Pronation,88.5,165
+POSTURE,Neutral,86.5,385
+POSTURE,Supination,83.5,164
+STATE,Aperture,100.0,326
+STATE,Closure,100.0,396

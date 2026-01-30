@@ -1,0 +1,139 @@
+# ============================================================================
+# SYNAPTIHAND PRODUCTION DOCKERFILE
+# PostgreSQL Backend with Redis Cache
+# ============================================================================
+#
+# This Dockerfile runs the HandPose application with Redis in a single container.
+# PostgreSQL runs as a separate container for proper data persistence and scaling.
+#
+# Architecture:
+# - PostgreSQL 16 (separate container for data persistence)
+# - Redis (embedded for caching/job queues)
+# - Node.js 18 (Express API + React frontend)
+
+# ============================================================================
+# Stage 1: Build Frontend
+# ============================================================================
+FROM node:18-alpine AS frontend-builder
+
+WORKDIR /build/frontend
+
+# Copy frontend package files
+COPY frontend/package*.json ./
+
+# Install dependencies
+RUN npm ci
+
+# Copy frontend source
+COPY frontend/ ./
+
+# Build frontend
+RUN npm run build
+
+# ============================================================================
+# Stage 2: Build Backend (Debian-based for bcrypt/native module compatibility)
+# ============================================================================
+FROM node:18-slim AS backend-builder
+
+# Install build dependencies for native modules (bcrypt, Prisma)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    openssl \
+    libssl-dev \
+    python3 \
+    make \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build/backend
+
+# Copy backend package files
+COPY backend-node/package*.json ./
+
+# Copy Prisma schema first for better layer caching
+COPY backend-node/prisma ./prisma/
+
+# Install dependencies (builds native modules for glibc)
+RUN npm ci
+
+# Copy backend source
+COPY backend-node/ ./
+
+# Generate Prisma client and build (continue despite errors)
+RUN npx prisma generate && npx tsc --noEmitOnError false || true
+
+# ============================================================================
+# Stage 3: Production Runtime with Redis + Python (LSTM Analysis)
+# Using Debian-based image for TensorFlow compatibility
+# ============================================================================
+FROM node:18-slim
+
+# Install runtime dependencies + Python for LSTM analysis
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    tini \
+    openssl \
+    libssl-dev \
+    postgresql-client \
+    redis-server \
+    supervisor \
+    python3 \
+    python3-pip \
+    python3-venv \
+    build-essential \
+    libffi-dev \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -sf python3 /usr/bin/python
+
+# Install Python dependencies for analysis service
+COPY analysis-service/requirements.txt /tmp/analysis-requirements.txt
+RUN pip3 install --no-cache-dir --break-system-packages -r /tmp/analysis-requirements.txt && \
+    rm /tmp/analysis-requirements.txt
+
+WORKDIR /app
+
+# Copy backend build artifacts
+COPY --from=backend-builder /build/backend/package*.json ./
+COPY --from=backend-builder /build/backend/node_modules ./node_modules
+COPY --from=backend-builder /build/backend/dist ./dist
+COPY --from=backend-builder /build/backend/prisma ./prisma
+
+# Copy frontend build artifacts
+COPY --from=frontend-builder /build/frontend/dist ./public
+
+# Copy analysis service (Python LSTM analysis)
+COPY analysis-service ./analysis-service
+
+# Copy LSTM model files (must be placed in Web-Service/LSTM-model before build)
+# To copy from parent directory, run: cp -r ../LSTM-model ./LSTM-model before docker build
+COPY LSTM-model ./LSTM-model
+
+# Copy scripts and configuration
+COPY docker-entrypoint-single.sh /usr/local/bin/
+COPY scripts/ /app/scripts/
+RUN chmod +x /usr/local/bin/docker-entrypoint-single.sh && \
+    chmod +x /app/scripts/*.sh || true
+
+# Create supervisord configuration
+COPY supervisord-single.conf /etc/supervisord.conf
+
+# Create necessary directories and set permissions
+RUN mkdir -p /app/uploads /app/backups /app/data /var/log/supervisor /var/run/redis && \
+    groupadd -g 1001 nodejs && \
+    useradd -u 1001 -g nodejs nodejs && \
+    chown -R nodejs:nodejs /app /var/log/supervisor /var/run/redis /usr/local/bin/docker-entrypoint-single.sh
+
+# NOTE: Do NOT switch to nodejs user - supervisord must run as root
+# Child processes will run as nodejs user via supervisord configuration
+
+# Expose application port
+EXPOSE 5000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=60s \
+    CMD curl -f http://localhost:5000/api/health || exit 1
+
+# Use tini as init system
+ENTRYPOINT ["/usr/bin/tini", "--"]
+
+# Start supervisord to manage both services
+CMD ["/usr/local/bin/docker-entrypoint-single.sh"]

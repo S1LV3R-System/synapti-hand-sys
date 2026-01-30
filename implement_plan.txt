@@ -1,0 +1,522 @@
+List of the problems:
+⚠️ Real Risks (No Sugarcoating)
+1. MediaPipe 0.10.9 Lock-in
+
+Not your fault — but this is your biggest technical risk.
+
+Mitigation strategy (do this):
+
+Freeze MP at 0.10.9
+
+
+Got you. I went through the 4 shared Python modules, and there are some **hard blockers** (won’t even run) plus a few **logic mismatches** that’ll quietly break analysis/results.
+
+## 1) `protocol_system.py` — **fatal syntax/structure problems**
+
+### ❌ Broken `try/except` (SyntaxError)
+
+You have a `try:` with **no body**. That’s an immediate crash on import.
+
+**Impact:** `protocol_system.py` can’t import → `main.py` fails immediately.
+
+---
+
+### ❌ Stray “dangling import” fragment / wrong indentation (SyntaxError / IndentationError)
+
+There’s an indented block that looks like the *middle of a removed import statement* (a list of symbols + closing `)`), but it’s sitting in file scope without a valid opening statement.
+
+**Impact:** also prevents import entirely.
+
+---
+
+### ❌ `EventAnalyzer` API mismatch with how `main.py` calls it
+
+`EventAnalyzer` defines `analyze_events(...)`
+…but `main.py` calls `self.event_analyzer.analyze(events, normalized_df)`
+
+**Impact:** even after fixing the syntax, you’ll get an `AttributeError: 'EventAnalyzer' object has no attribute 'analyze'`.
+
+---
+
+### ❌ Incorrect typing: `any` should be `Any`
+
+In `ComprehensiveEventReport`, you used `any` (Python built-in function) instead of `typing.Any`.
+
+**Impact:** not always fatal at runtime, but it’s wrong and breaks type checking / can confuse tooling.
+
+---
+
+### ⚠️ Duplicate/repeated imports (not fatal, but messy and risky)
+
+You’ve got multiple redundant `dataclass` and `typing` import lines stacked.
+
+**Impact:** not a crash, but it’s exactly how merge/consolidation bugs sneak in (like the dangling fragment above).
+
+---
+
+### ⚠️ TensorFlow import handling is internally inconsistent
+
+You import TF’s `load_model` unconditionally at top-level
+…but then you *also* try to handle TF not being available via `try/except ImportError` (which is currently broken anyway).
+
+**Impact:** if TF isn’t installed, you’ll crash before any fallback can run.
+
+---
+
+### ❌ `ProtocolAnalyzer` uses classes that are not imported in this module
+
+`ProtocolAnalyzer` uses `DataNormalizer`, `FilterFactory`, etc.
+…but your “Local imports” only show config symbols.
+
+**Impact:** once syntax is fixed, you’ll hit `NameError` unless those are imported (or fully qualified).
+
+---
+
+## 2) `main.py` — runs, but will fail in backend/CLI output + ignores CLI flag
+
+### ❌ Returning a Pandas DataFrame inside results breaks JSON serialization
+
+You store `'raw_data': normalized_df` in `analysis_results`.
+Then you print `json.dumps(result, indent=2)` in CLI.
+
+**Impact:** `TypeError: Object of type DataFrame is not JSON serializable`.
+
+If this is meant for Supabase/backend response, it’s a hard no—send a file path, summary stats, or serialize separately.
+
+---
+
+### ❌ `--no-lstm` flag exists but is ignored
+
+CLI defines `--no-lstm`
+…but `analyze_from_backend()` always creates orchestrator with `use_lstm=True`.
+
+**Impact:** user asks to disable LSTM → your pipeline still tries to use it.
+
+---
+
+### ❌ Depends on the mismatched `EventAnalyzer` method name (mentioned above)
+
+Main calls `.analyze(...)`
+Protocol module provides `.analyze_events(...)`
+
+**Impact:** runtime crash after import issues are fixed.
+
+---
+
+## 3) `config.py` — mostly fine, but watch consolidation artifacts
+
+### ✅ Paths + constants look coherent
+
+Model paths and constants look structurally OK.
+
+### ⚠️ Potential “double definition drift” risk
+
+You define `DEFAULT_FPS = 30` in one place  and `BiomarkerConfig` also has its own `default_fs: float = 30.0`.
+That’s not wrong, but it’s how configs slowly diverge over time.
+
+---
+
+## 4) `data_handling.py` — likely okay, one “gotcha” pattern
+
+### ⚠️ `create_chain()` mutates the config dicts
+
+`filter_type = config.pop('type')` mutates the dict you pass in.
+
+**Impact:** if you reuse those same configs later (logging, debugging, re-building chains), the `'type'` key is gone and things break in confusing ways.
+
+---
+
+## The big-ticket blockers (the ones you must fix first)
+
+1. `protocol_system.py` **won’t import** due to the empty `try:` and the dangling fragment.
+2. `main.py` calls an `EventAnalyzer` method that doesn’t exist.
+3. `main.py` returns a DataFrame in results, then tries to JSON dump it.
+4. CLI flag `--no-lstm` is ignored.
+
+If you want, I can go one level deeper and list **exactly what each broken block was *intended* to be** (based on surrounding code) so you can restore it cleanly—still in text, no code dump.
+Based on the provided code, there are **two critical syntax errors** in `protocol_system.py` caused by incomplete code merging or copy-paste issues.
+
+### 1. Broken Import Statement (`protocol_system.py`)
+
+At the beginning of the `PROTOCOL_ANALYZER.PY` section, there is a list of variables hanging without a specific import statement. This will cause a `SyntaxError`.
+
+**Location:** `protocol_system.py`, roughly lines 40–45.
+
+**Current Code:**
+
+```python
+# =============================================================================
+# PROTOCOL_ANALYZER.PY
+# =============================================================================
+
+
+
+    FINGERTIP_INDICES, FINGER_LANDMARKS,
+    ProtocolAnalysisConfig, AnalysisOutputConfig,
+    BiomarkerConfig, CLINICAL_REFERENCE_RANGES, SEVERITY_COLORS
+)
+
+```
+
+**The Fix:**
+It appears meant to be a continuation of a `from config import` statement. You need to add the import statement back:
+
+```python
+from config import (
+    FINGERTIP_INDICES, FINGER_LANDMARKS,
+    ProtocolAnalysisConfig, AnalysisOutputConfig,
+    BiomarkerConfig, CLINICAL_REFERENCE_RANGES, SEVERITY_COLORS
+)
+
+```
+
+---
+
+### 2. Empty `try` Block (`protocol_system.py`)
+
+In the `EVENT_DETECTOR.PY` section, there is a `try/except` block where the `try` body is completely missing. This will cause an `IndentationError` or `SyntaxError`.
+
+**Location:** `protocol_system.py`, roughly line 1560 (under the `EVENT_DETECTOR.PY` header).
+
+**Current Code:**
+
+```python
+try:
+except ImportError:
+    print("Warning: TensorFlow not available. Event detection will be limited.")
+    load_model = None
+
+```
+
+**The Fix:**
+You need to add the import intended for that block (likely `load_model` from Keras/TensorFlow):
+
+```python
+try:
+    from tensorflow.keras.models import load_model
+except ImportError:
+    print("Warning: TensorFlow not available. Event detection will be limited.")
+    load_model = None
+
+```
+
+
+Cool — here’s the **complete fix plan** to make the current system **(1) import-clean, (2) runtime-stable, (3) backend/JSON-safe, and (4) consistent across modules**. I’m going to be very explicit about **what to change and why**, without dumping code.
+
+---
+
+## 0) What “done” looks like (success criteria)
+
+After these fixes:
+
+1. `python main.py --input ...` runs without import/syntax errors
+2. `--no-lstm` actually disables LSTM inference
+3. Results returned from `analyze_file()` are **JSON serializable** (no DataFrame objects)
+4. `protocol_system.py` imports and works even if TensorFlow is missing
+5. Filter config building doesn’t silently mutate configs (so reproducibility works)
+
+---
+
+## 1) Fix `protocol_system.py` so it **imports** (right now it can’t)
+
+### 1A) Remove the “dangling fragment” near the top
+
+There’s a random indented fragment that’s clearly a broken leftover from consolidation:
+`FINGERTIP_INDICES, FINGER_LANDMARKS, ... )` sitting at module scope with no opening statement. That’s a hard Syntax/Indentation error.
+
+✅ **Fix:** delete that entire fragment (those lines).
+**Why:** it’s not attached to any import or function; it’s dead/broken.
+
+---
+
+### 1B) Fix the empty `try:` block (fatal SyntaxError)
+
+You currently have:
+
+* `try:`
+* `except ImportError:` …
+
+…with nothing inside the try. That’s invalid Python.
+
+✅ **Fix:** replace that block with a *real* optional TensorFlow import pattern.
+
+**Best practice for this project:**
+
+* Do **NOT** import TensorFlow at module top-level.
+* Do an optional import inside a try that actually contains the TF import.
+
+Also: right now you import `load_model` unconditionally at the top (`from tensorflow.keras.models import load_model`) , which defeats any fallback logic.
+
+✅ **Fix:** remove the top-level `from tensorflow.keras.models import load_model` line, and set `load_model = None` when TF isn’t available.
+
+---
+
+### 1C) Fix missing imports / undefined names inside `protocol_system.py`
+
+`ProtocolAnalyzer` constructs `DataNormalizer` and `FilterFactory` and others.
+But `protocol_system.py` **does not import them**.
+
+✅ **Fix:** explicitly import the required classes from `data_handling.py`:
+
+* `DataNormalizer`, `AdaptiveNormalizer` (if used)
+* `FilterFactory`
+* any threshold / detector utilities referenced (PeakDetector / AdaptiveThresholder etc. if they live elsewhere inside the same file, ignore—if not, import them)
+
+Also: your `EventDetector.__init__` uses `MODEL_PATH`, `LABEL_ENCODERS_PATH`, `TRAINING_CONFIG_PATH`.
+But `protocol_system.py` isn’t importing those from config right now.
+
+✅ **Fix:** add these from `config.py` to the local imports in `protocol_system.py`.
+
+---
+
+### 1D) Clean up the duplicated imports (not required, but prevents future breakage)
+
+You’ve got a stack of duplicated `dataclass` and `typing` imports.
+Not fatal, but it’s exactly how you ended up with the dangling fragment.
+
+✅ **Fix:** collapse to one clean set:
+
+* `from dataclasses import dataclass, field, asdict`
+* `from typing import Dict, List, Optional, Any, Tuple`
+
+---
+
+## 2) Fix the API mismatch between `main.py` and `protocol_system.py`
+
+In `main.py`, you call:
+`event_stats = self.event_analyzer.analyze(events, normalized_df)`
+
+So `EventAnalyzer` **must** expose a method named `.analyze(...)` with that signature.
+
+✅ **Fix options (pick one):**
+
+* **Option A (best for compatibility):** In `protocol_system.py`, ensure `EventAnalyzer` has `analyze(self, events, normalized_df)` and keep it as the primary entry point.
+* **Option B:** If your implementation is called something else (like `analyze_events`), then make `analyze = analyze_events` as an alias.
+
+**Why:** `main.py` is already written expecting `.analyze()`, so don’t fight it.
+
+---
+
+## 3) Fix `main.py` so output is backend-safe (JSON serialization)
+
+Right now you return a Pandas DataFrame inside results:
+`'raw_data': normalized_df`
+
+That will break:
+
+* CLI JSON output
+* any Supabase/REST response
+* report generator if it tries to dump JSON
+
+✅ **Fix:** never return a DataFrame in the final dict.
+
+Use one of these approaches:
+
+### 3A) Replace `raw_data` with a file reference
+
+* Save `normalized_df` to `{output_dir}/normalized.csv` (or parquet).
+* Return:
+
+  * `normalized_data_path`
+  * `normalized_columns`
+  * `num_frames`
+  * `fps`
+
+**Why:** stable, audit-friendly, and works for backend.
+
+### 3B) If you want lightweight inline data
+
+Return only:
+
+* first N rows as list-of-dicts (like 200 rows max)
+* OR aggregated stats only (mean/std per landmark)
+
+But file reference is the pro move.
+
+---
+
+## 4) Make `--no-lstm` actually work
+
+The orchestrator already supports `use_lstm` in its constructor.
+…but your CLI flag exists and the backend function can still force LSTM on (you mentioned this in your earlier report too).
+
+✅ **Fix:** wherever you create `EnhancedAnalysisOrchestrator`, pass:
+
+* `use_lstm = not args.no_lstm`
+
+Also ensure the backend entry point doesn’t hardcode it.
+
+**Success behavior:**
+
+* If `--no-lstm` is set, `self.lstm_engine = None`  and the fallback event dict is used.
+
+---
+
+## 5) Fix filter-chain config mutation in `data_handling.py`
+
+This line mutates the configs passed in:
+`filter_type = config.pop('type')`
+
+✅ **Fix:** do not `pop()` from the user’s dict. Use:
+
+* `filter_type = config['type']`
+* and create a **copy** of config for kwargs minus type (or build kwargs without modifying the original)
+
+**Why it matters:**
+
+* If the same configs are reused (logging, re-running, debugging), “type” disappears and later steps fail randomly.
+* Reproducibility dies.
+
+---
+
+## 6) Make event formats consistent (quiet logic bug waiting to happen)
+
+Your video generator expects events like:
+`event['frame']`, `event['event']`, `event['confidence']`
+
+But your fallback events are currently empty lists, and your LSTM output may be structured differently (depends on `LSTMEngine.predict()`).
+
+✅ **Fix:** enforce a single canonical event structure **immediately after detection**:
+
+* If LSTM returns “segments” (start/end), convert them into frame-level overlays (or pick representative frames).
+* If EventDetector returns dataclasses, convert to dict using `.to_dict()` style logic (you already have one in `DetectedEvent`).
+
+**Rule:** Everything downstream consumes the same schema.
+
+---
+
+## 7) Recommended consolidation cleanup (prevents next regression)
+
+These aren’t “must run” blockers, but they’re stability multipliers:
+
+### 7A) One FPS source of truth
+
+You mix `DEFAULT_FPS`, hardcoded `30`, and `fps` parameter flows. You even compute duration using `len(df)/self.fps`.
+
+✅ Fix: ensure:
+
+* Orchestrator `fps` is always used everywhere
+* No hidden hardcoded “30 fps” assumptions (like `DetectedEvent.duration_seconds` currently divides by 30.0).
+
+That `30.0` should be `self.fps` or stored in the event metadata.
+
+---
+
+# Final Implementation Order (do this exactly)
+
+### Step 1 — Make imports clean
+
+1. Delete dangling fragment in `protocol_system.py`
+2. Remove top-level TF `load_model` import
+3. Fix the broken `try/except` block
+4. Add missing imports (DataNormalizer/FilterFactory and model path constants)
+
+### Step 2 — Make module APIs match
+
+5. Ensure `EventAnalyzer.analyze(...)` exists exactly as `main.py` calls it
+
+### Step 3 — Make results backend-safe
+
+6. Remove DataFrame from returned dict (`raw_data`)  and replace with a file path + summary
+
+### Step 4 — Respect CLI flags
+
+7. Wire `--no-lstm` to orchestrator creation (`use_lstm`)
+
+### Step 5 — Prevent future “ghost bugs”
+
+8. Stop mutating filter configs in `create_chain()`
+9. Unify fps usage (remove hardcoded 30 in event duration)
+
+---
+
+If you want, I can also give you a **“post-fix verification checklist”** (5–8 commands / assertions) to confirm everything is correct end-to-end — without writing tests yet.
+Based on the code provided, there are **two critical syntax errors** in the file `protocol_system.py` that will prevent the system from running. These appear to be artifacts from merging multiple files.
+
+Here is the complete solution to fix the system.
+
+### Fix 1: Broken Import Statement in `protocol_system.py`
+
+Around line 40, under the `PROTOCOL_ANALYZER.PY` header, a list of variables is hanging without an import keyword.
+
+**Current Broken Code:**
+
+```python
+# ... (header comments)
+
+    FINGERTIP_INDICES, FINGER_LANDMARKS,
+    ProtocolAnalysisConfig, AnalysisOutputConfig,
+    BiomarkerConfig, CLINICAL_REFERENCE_RANGES, SEVERITY_COLORS
+)
+
+```
+
+**Solution:**
+Add the `from config import (` statement before these variables.
+
+```python
+from config import (
+    FINGERTIP_INDICES, FINGER_LANDMARKS,
+    ProtocolAnalysisConfig, AnalysisOutputConfig,
+    BiomarkerConfig, CLINICAL_REFERENCE_RANGES, SEVERITY_COLORS
+)
+
+```
+
+---
+
+### Fix 2: Empty `try` Block in `protocol_system.py`
+
+Around line 1560, under the `EVENT_DETECTOR.PY` header, there is a `try` block with no content, which raises an `IndentationError`.
+
+**Current Broken Code:**
+
+```python
+# ... (header comments)
+
+try:
+except ImportError:
+    print("Warning: TensorFlow not available. Event detection will be limited.")
+    load_model = None
+
+```
+
+**Solution:**
+Insert the import statement for `load_model` inside the `try` block.
+
+```python
+try:
+    from tensorflow.keras.models import load_model
+except ImportError:
+    print("Warning: TensorFlow not available. Event detection will be limited.")
+    load_model = None
+
+```
+
+---
+
+### Summary of Cleanup (Optional)
+
+While not strict syntax errors, `data_handling.py` contains redundant duplicate imports at the top of the file (lines 10-14 and 18-24). You can clean these up to improve readability:
+
+**Cleaned `data_handling.py` Imports:**
+
+```python
+# Standard library imports
+from dataclasses import dataclass
+from typing import Optional, Tuple, Dict, List, Callable
+
+# Third-party imports
+from abc import ABC, abstractmethod
+from scipy import signal, interpolate, ndimage, stats
+from scipy.ndimage import gaussian_filter1d, median_filter
+from scipy.stats import median_abs_deviation
+from statsmodels.nonparametric.smoothers_lowess import lowess
+import numpy as np
+import pandas as pd
+import pywt
+
+# Local imports
+from config import FilterConfig, ThresholdConfig, DEFAULT_FPS
+
+```

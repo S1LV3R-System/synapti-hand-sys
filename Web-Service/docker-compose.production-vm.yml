@@ -1,0 +1,272 @@
+# ============================================================================
+# PRODUCTION VM DEPLOYMENT - 500 CONCURRENT USERS
+# ============================================================================
+#
+# This configuration is optimized for production deployment on VMs with:
+# - High availability (multiple app instances behind load balancer)
+# - PostgreSQL with replication-ready setup
+# - Redis caching for session management
+# - Production-grade security and monitoring
+# - HIPAA-compliant configuration
+#
+# VM Requirements:
+#   App VMs: 4 vCPU, 16GB RAM each (deploy 3 instances)
+#   DB VM: 8 vCPU, 32GB RAM (single instance with backup strategy)
+#   Redis VM: 2 vCPU, 8GB RAM
+#
+# Usage:
+#   docker compose -f docker-compose.production-vm.yml up -d
+#
+# ============================================================================
+
+version: '3.8'
+
+services:
+  # ============================================================================
+  # APPLICATION SERVICE (Deploy on 3 separate VMs)
+  # ============================================================================
+  app:
+    image: shivamsilver/silver-box:synaptihand-app
+    container_name: synaptihand-app
+    restart: unless-stopped
+
+    # Production environment variables
+    environment:
+      # Server Configuration
+      - NODE_ENV=production
+      - PORT=5000
+      - HOST=0.0.0.0
+
+      # Database Connection (Cloud SQL or VM PostgreSQL)
+      - DATABASE_URL=${DATABASE_URL}
+
+      # Redis Connection (Separate VM)
+      - REDIS_HOST=${REDIS_HOST:-redis-vm-ip}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_DB=0
+
+      # Security
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRES_IN=7d
+      - SESSION_SECRET=${SESSION_SECRET}
+
+      # CORS Configuration
+      - CORS_ORIGIN=${CORS_ORIGIN:-https://app.synaptihand.com}
+
+      # File Upload
+      - MAX_FILE_SIZE=524288000
+      - ALLOWED_VIDEO_TYPES=mp4,avi,mov
+      - TEMP_UPLOAD_DIR=/tmp/synaptihand-uploads
+
+      # Google Cloud Storage (already configured)
+      - GCS_BUCKET_NAME=handpose-system
+      - GCS_PROJECT_ID=praxis-dolphin-467607-s8
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/secrets/gcs-service-account.json
+      - ENABLE_MOCK_STORAGE=false
+
+      # Soft-Delete & Cleanup
+      - TZ=UTC
+      - CLEANUP_ENABLED=true
+      - CLEANUP_RETENTION_DAYS=15
+      - CLEANUP_CRON=0 0 2 * * *
+
+      # Monitoring & Logging
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - ENABLE_REQUEST_LOGGING=true
+      - ENABLE_PERFORMANCE_MONITORING=true
+
+      # Feature Flags
+      - ENABLE_RATE_LIMITING=true
+      - RATE_LIMIT_WINDOW_MS=900000
+      - RATE_LIMIT_MAX_REQUESTS=100
+
+    # Resource limits (per container)
+    deploy:
+      resources:
+        limits:
+          cpus: '3.0'
+          memory: 12G
+        reservations:
+          cpus: '1.0'
+          memory: 4G
+      replicas: 1  # Run 1 per VM, 3 VMs total
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+    # Volumes
+    volumes:
+      - app-uploads:/app/uploads
+      - app-logs:/var/log/supervisor
+      - ./secrets:/app/secrets:ro
+
+    # Network
+    ports:
+      - "5000:5000"
+
+    # Security
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+
+  # ============================================================================
+  # NGINX REVERSE PROXY (Optional - for serving frontend static files)
+  # ============================================================================
+  nginx:
+    image: nginx:alpine
+    container_name: synaptihand-nginx
+    restart: unless-stopped
+
+    ports:
+      - "80:80"
+      - "443:443"
+
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./frontend/dist:/usr/share/nginx/html:ro
+      - nginx-cache:/var/cache/nginx
+
+    depends_on:
+      - app
+
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+# ============================================================================
+# STANDALONE DATABASE VM CONFIGURATION
+# (Deploy this on separate dedicated database VM)
+# ============================================================================
+#
+# Create separate docker-compose-database-vm.yml:
+#
+# services:
+#   postgres:
+#     image: postgres:16-alpine
+#     container_name: synaptihand-postgres
+#     restart: unless-stopped
+#
+#     environment:
+#       - POSTGRES_USER=synaptihand
+#       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+#       - POSTGRES_DB=synaptihand
+#       - PGDATA=/var/lib/postgresql/data/pgdata
+#
+#       # Performance tuning for 32GB RAM
+#       - POSTGRES_SHARED_BUFFERS=8GB
+#       - POSTGRES_EFFECTIVE_CACHE_SIZE=24GB
+#       - POSTGRES_MAINTENANCE_WORK_MEM=2GB
+#       - POSTGRES_WAL_BUFFERS=16MB
+#       - POSTGRES_MAX_CONNECTIONS=500
+#       - POSTGRES_WORK_MEM=20MB
+#
+#     volumes:
+#       - postgres-data:/var/lib/postgresql/data
+#       - postgres-backups:/backups
+#       - ./scripts/postgres-backup.sh:/usr/local/bin/backup.sh:ro
+#
+#     ports:
+#       - "5432:5432"
+#
+#     deploy:
+#       resources:
+#         limits:
+#           cpus: '7.0'
+#           memory: 28G
+#         reservations:
+#           cpus: '4.0'
+#           memory: 16G
+#
+#     healthcheck:
+#       test: ["CMD-SHELL", "pg_isready -U synaptihand"]
+#       interval: 10s
+#       timeout: 5s
+#       retries: 5
+#
+# ============================================================================
+# STANDALONE REDIS VM CONFIGURATION
+# (Deploy this on separate redis VM)
+# ============================================================================
+#
+# services:
+#   redis:
+#     image: redis:7-alpine
+#     container_name: synaptihand-redis
+#     restart: unless-stopped
+#
+#     command: >
+#       redis-server
+#       --appendonly yes
+#       --appendfsync everysec
+#       --maxmemory 6gb
+#       --maxmemory-policy allkeys-lru
+#       --requirepass ${REDIS_PASSWORD}
+#
+#     volumes:
+#       - redis-data:/data
+#
+#     ports:
+#       - "6379:6379"
+#
+#     deploy:
+#       resources:
+#         limits:
+#           cpus: '1.5'
+#           memory: 7G
+#         reservations:
+#           cpus: '0.5'
+#           memory: 4G
+#
+#     healthcheck:
+#       test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+#       interval: 10s
+#       timeout: 5s
+#       retries: 5
+
+# ============================================================================
+# VOLUMES
+# ============================================================================
+volumes:
+  app-uploads:
+    driver: local
+    name: synaptihand-app-uploads
+
+  app-logs:
+    driver: local
+    name: synaptihand-app-logs
+
+  nginx-cache:
+    driver: local
+    name: synaptihand-nginx-cache
+
+  # For database VM
+  # postgres-data:
+  #   driver: local
+  #   name: synaptihand-postgres-data
+
+  # postgres-backups:
+  #   driver: local
+  #   name: synaptihand-postgres-backups
+
+  # For redis VM
+  # redis-data:
+  #   driver: local
+  #   name: synaptihand-redis-data
+
+# ============================================================================
+# NETWORKS
+# ============================================================================
+networks:
+  default:
+    name: synaptihand-production
+    driver: bridge

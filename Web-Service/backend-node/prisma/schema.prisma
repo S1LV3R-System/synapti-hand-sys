@@ -1,0 +1,185 @@
+// ============================================================================
+// SYNAPTIHAND POSTGRESQL PRISMA SCHEMA
+// Version: 3.1.0 - Matches Supabase Final-schema.sql exactly
+// ============================================================================
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// USER-MAIN TABLE (Matches Supabase User-Main exactly)
+// ============================================================================
+
+model User {
+  id                  String    @id @default(uuid()) @map("User_ID") @db.Uuid
+  authUserId          String?   @unique @map("auth_user_id") @db.Uuid
+  userType            String    @default("Clinician") @map("user_type") @db.Text
+  firstName           String    @default("") @map("first_name") @db.VarChar
+  middleName          String?   @default("") @map("middle__name") @db.VarChar
+  lastName            String    @map("last_name") @db.VarChar
+  birthDate           DateTime  @map("birth_date") @db.Date
+  email               String    @unique @db.Text
+  phoneNumber         String    @unique @map("phone_number") @db.Text
+  institute           String    @map("Institute") @db.Text
+  department          String    @map("Department") @db.Text
+  verificationStatus  Boolean   @default(false) @map("Verification_status")
+  approvalStatus      Boolean   @default(false) @map("Approval_status")
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  deletedAt           DateTime? @map("deleted_at") @db.Timestamp
+  approvedAt          DateTime? @map("Approved_at") @db.Timestamp
+  rejectedAt          DateTime? @map("Rejected_at") @db.Timestamp
+  verifiedAt          DateTime? @map("Verified_at") @db.Timestamp
+  passwordHash        String    @map("passwordHash") @db.Text
+
+  // Relationships
+  ownedProjects       Project[]           @relation("ProjectCreator")
+  createdPatients     Patient[]           @relation("PatientCreator")
+  createdProtocols    Protocol[]          @relation("ProtocolCreator")
+  clinicianSessions   ExperimentSession[] @relation("SessionClinician")
+
+  @@map("User-Main")
+}
+
+// ============================================================================
+// PROJECT-TABLE (Matches Supabase Project-Table exactly)
+// ============================================================================
+
+model Project {
+  id                 String    @id @default(uuid()) @map("project_id") @db.Uuid
+  projectName        String    @map("project_name") @db.Text
+  projectDescription String?   @map("project_description") @db.Text
+  projectCreatorId   String    @map("project_creator") @db.Uuid
+  projectMembers     String[]  @default([]) @map("project_members") @db.Uuid
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  projectDataPath    Json      @default("{\"base_path\": \"\", \"exports_path\": \"\"}") @map("project-data_path") @db.JsonB
+  deletedAt          DateTime? @map("deleted_at") @db.Timestamp
+
+  // Relationships
+  projectCreator     User      @relation("ProjectCreator", fields: [projectCreatorId], references: [id], onDelete: Restrict)
+  patients           Patient[]
+  protocols          Protocol[] @relation("ProjectProtocols")
+
+  @@map("Project-Table")
+}
+
+// ============================================================================
+// PATIENT-TABLE (Matches Supabase Patient-Table exactly)
+// ============================================================================
+
+model Patient {
+  id          String    @id @default(uuid()) @db.Uuid
+  projectId   String    @map("project_id") @db.Uuid
+  creatorId   String    @map("creator_id") @db.Uuid
+  patientId   String    @unique @map("patient_id") @db.VarChar
+  firstName   String    @map("first_name") @db.Text
+  middleName  String?   @map("middle_name") @db.Text
+  lastName    String    @map("last_name") @db.Text
+  birthDate   DateTime  @map("birth_date") @db.Date
+  gender      String?   @map("gender") @db.Text
+  height      Decimal   @db.Decimal
+  weight      Decimal   @db.Decimal
+  diagnosis   String?   @default("Healthy") @db.Text
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamp
+
+  // Relationships
+  project     Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  creator     User                @relation("PatientCreator", fields: [creatorId], references: [id], onDelete: Restrict)
+  sessions    ExperimentSession[]
+
+  @@map("Patient-Table")
+}
+
+// ============================================================================
+// PROTOCOL-TABLE (Extended schema with clinical metadata and analysis config)
+// ============================================================================
+
+model Protocol {
+  id                   String    @id @default(uuid()) @db.Uuid
+  protocolName         String    @map("protocol_name") @db.Text
+  protocolDescription  String?   @map("protocol_description") @db.Text
+  creatorId            String    @map("creator") @db.Uuid
+  linkedProjectId      String?   @map("linked_project") @db.Uuid
+  protocolInformation  Json[]    @default([]) @map("protocol_information") @db.JsonB
+  private              Boolean   @default(true)
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  deletedAt            DateTime? @map("deleted_at") @db.Timestamp
+
+  // Relationships
+  creator              User                @relation("ProtocolCreator", fields: [creatorId], references: [id], onDelete: Restrict)
+  linkedProject        Project?            @relation("ProjectProtocols", fields: [linkedProjectId], references: [id], onDelete: SetNull)
+  sessions             ExperimentSession[]
+
+  @@map("Protocol-Table")
+}
+
+// ============================================================================
+// EXPERIMENT-SESSION TABLE (Matches Supabase Experiment-Session exactly)
+// ============================================================================
+
+model ExperimentSession {
+  id                  String    @id @default(uuid()) @map("session_id") @db.Uuid
+  clinicianId         String    @map("Clinician") @db.Uuid
+  patientId           String    @map("Patient") @db.Uuid
+  protocolId          String    @map("Protocol") @db.Uuid
+  gripStrength        Float[]   @default([]) @map("Grip_strength")
+  videoDataPath       String    @default("") @map("video_data_path") @db.Text
+  rawKeypointDataPath String    @default("") @map("raw_keypoint_data_path") @db.Text
+  analyzedXlsxPath    String    @default("") @map("analyzed_xlsx_path") @db.Text
+  reportPdfPath       String    @default("") @map("Report_pdf_path") @db.Text
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  deletedAt           DateTime? @map("deleted_at") @db.Timestamp
+  mobileSessionId     String?   @unique @map("mobile_session_id") @db.VarChar(100)
+  duration            Int?
+  fps                 Int?
+  deviceInfo          String?   @map("device_info") @db.Text
+  status              String    @default("created") @db.VarChar(30)
+  analysisProgress    Int?      @default(0) @map("analysis_progress")
+  analysisError       String?   @map("analysis_error") @db.Text
+  clinicalNotes       String?   @map("clinical_notes") @db.Text
+
+  // Relationships
+  clinician           User      @relation("SessionClinician", fields: [clinicianId], references: [id], onDelete: Restrict)
+  patient             Patient   @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  protocol            Protocol  @relation(fields: [protocolId], references: [id], onDelete: Restrict)
+
+  @@map("Experiment-Session")
+}
+
+// ============================================================================
+// AUXILIARY TABLES (Backend-only, not in Supabase schema)
+// ============================================================================
+
+model AuditLog {
+  id         Int      @id @default(autoincrement())
+  userId     String?  @map("user_id") @db.Uuid
+  action     String   @db.VarChar(100)
+  resource   String?  @db.VarChar(100)
+  resourceId String?  @map("resource_id")
+  details    String?  @db.Text
+  ipAddress  String?  @map("ip_address")
+  userAgent  String?  @map("user_agent") @db.Text
+  status     String   @default("success") @db.VarChar(20)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@map("audit_logs")
+}
+
+model EmailVerification {
+  id        String   @id @default(uuid()) @db.Uuid
+  email     String   @db.VarChar(255)
+  code      String   @db.VarChar(6)
+  expiresAt DateTime @map("expires_at") @db.Timestamptz
+  verified  Boolean  @default(false)
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@map("email_verifications")
+}

@@ -1,0 +1,175 @@
+admin@synaptihand.com
+Admin123!@
+silverlineshivam@gmail.com
+Tatsuya@1
+
+
+  ┌──────────────────────────────────────────────────────────────────────────────┐
+  │                        COMPLETE DATA FLOW                                    │
+  ├──────────────────────────────────────────────────────────────────────────────┤
+  │                                                                              │
+  │  [ANDROID]                                                                   │
+  │    Camera (60fps) → MediaPipe → 21 landmarks × 3D (60fps) → ExcelKeypointRecorder (60fps)│
+  │         ↓                            ↓                      ↓                │
+  │    VideoCapture               HandLandmarkOverlay       keypoints.xlsx       │
+  │    (720p/30fps)               (30fps display)                ↓               │
+  │         ↓                                               Upload to  GCS       │
+  │    video.mp4                                                                 │
+  │          ↓                                                                   │
+  │   video_labeled.                                                             │
+  │          ↓                                                                   │
+  │     Upload to  GCS                                                           │
+  │[BACKEND NODE.JS]                                                             │
+  │    POST /api/mobile/keypoints → RecordingSession → Keypoint.xlsx             │
+  │                                        ↓                                     │
+  │                              Bull Queue: analysisQueue.add()                 │
+  │                                        ↓      (5 max processing at once)     │
+  │  [PROCESSING WORKER]                                                         │
+  │    Download from GCS → Python processing.service → [LSTM SERVICE]            │
+  │  backend_integration.py → LSTM events → LSTMEventDetection records           │
+  │                                (Using the LSTM Result) Analysis Results      │
+  │                                                            ↓                 │
+  │                                                    SignalProcessingResult    │
+  │                                                            ↓                 │
+  │                                                   ClinicalAnalysis           │
+  │                                                            ↓                 │
+  │                                                                              │
+  │  [PROTOCOL ANALYZER] (IF protocolId present - CURRENTLY BROKEN) (FIX IT)     │
+  │    movementAnalysisOrchestrator → Movement-specific metrics                  │
+  │                             ↓                                                │
+  │                 Excel/PDF reports → GCS: Result-Output/{recordingId}/        │
+  │    ClinicalAnalysis v2.0 update                                              │
+  │                                                                              │
+  └──────────────────────────────────────────────────────────────────────────────┘
+
+  ┌─────────┬──────────────────────────┬────────────┐
+  │  Phase  │          Tasks           │ Complexity │
+  ├─────────┼──────────────────────────┼────────────┤
+  │ Phase 1 │ EGL/OpenGL setup         │ High       │
+  ├─────────┼──────────────────────────┼────────────┤
+  │ Phase 2 │ Overlay shader rendering │ Medium     │
+  ├─────────┼──────────────────────────┼────────────┤
+  │ Phase 3 │ MediaCodec integration   │ High       │
+  ├─────────┼──────────────────────────┼────────────┤
+  │ Phase 4 │ CameraX surface routing  │ Medium     │
+  ├─────────┼──────────────────────────┼────────────┤
+  │ Phase 5 │ Integration & testing    │ Medium     │
+  └─────────┴──────────────────────────┴────────────┘
+
+  Role-Based Access Matrix
+  ┌────────────────────┬───────┬──────────────────┬────────────┬───────────────┐
+  │      Feature       │ Admin │    Clinician     │ Researcher │    Patient    │
+  ├────────────────────┼───────┼──────────────────┼────────────┼───────────────┤
+  │ User Management    │ ✅    │ ❌               │ ❌         │ ❌            │
+  ├────────────────────┼───────┼──────────────────┼────────────┼───────────────┤
+  │ Audit Logs         │ ✅    │ ❌               │ ❌         │ ❌            │
+  ├────────────────────┼───────┼──────────────────┼────────────┼───────────────┤
+  │ Patient Management │ ✅    │ ✅               │ ✅         │ ❌            │
+  ├────────────────────┼───────┼──────────────────┼────────────┼───────────────┤
+  │ Recording Upload   │ ✅    │ ✅               │ ✅         │ ❌            │
+  ├────────────────────┼───────┼──────────────────┼────────────┼───────────────┤
+  │ Protocol Creation  │ ✅    │ ❌               │ ✅         │ ❌            │
+  ├────────────────────┼───────┼──────────────────┼────────────┼───────────────┤
+  │ Protocol Viewing   │ ✅    │ ✅ (public only) │ ✅ (all)   │ ❌            │
+  ├────────────────────┼───────┼──────────────────┼────────────┼───────────────┤
+  │ Comparisons        │ ✅    │ ❌               │ ✅         │ ❌            │
+  ├────────────────────┼───────┼──────────────────┼────────────┼───────────────┤
+  │ Clinical Analysis  │ ✅    │ ✅               │ ✅         │ ❌            │
+  └────────────────────┴───────┴──────────────────┴────────────┴───────────────┘
+
+{
+Edit Protocol
+Basic Information
+Protocol Name finger tapping
+Version
+Description
+Indicated For
+Contraindications
+Movements
+Overall Repetitions
+No movements configured. Add movements to define the assessment procedure.
+Clinical Guidelines
+Patient Instructions
+Clinical Interpretation Guidelines
+Analysis Results Output
+Select which analysis outputs should be generated for this protocol. Each output represents a backend analysis point for the keypoint data pipeline.
+Maximum Hand Aperture
+3D Cyclogram
+3D Trajectory Plot
+ROM (Range of Motion)
+Tremor (Wavelet Spectrogram)
+Opening-Closing Velocity
+Cycle Frequency
+Variability Across Cycles
+Inter-Finger Coordination
+Symmetry Across Cycles
+Geometric Curvature Score
+Settings
+Active
+Public (visible to all users)
+}
+the database entry:
+{[{"idx":2,"id":"96169b7f-238c-4684-8330-65e39aaa67b7","protocol_name":"finger tapping","protocol_description":null,"creator":"112accc1-b1f8-4bf9-91f2-f62f77eaf710","linked_project":null,"protocol_information":[{"hand":"both","name":"finger_tapping_both_0","order":0,"config":{"mode":"bilateral","fingers":{"ring":true,"index":true,"pinky":true,"thumb":true,"middle":true}},"posture":"pronation","duration":30,"repetitions":5,"instructions":"","movementType":"finger_tapping"}],"private":false,"created_at":"2026-01-21 21:26:15.298699+00","deleted_at":null}]}
+
+there is a difference between the stored information and the visible information on the frontend
+also the information about the {Select which analysis outputs should be generated for this protocol} are not being saved in the protocol information
+
+we also need to consider how the backend actually analyze the data and generate results based on the database entry:
+{[{"idx":2,"id":"96169b7f-238c-4684-8330-65e39aaa67b7","protocol_name":"finger tapping","protocol_description":null,"creator":"112accc1-b1f8-4bf9-91f2-f62f77eaf710","linked_project":null,"protocol_information":[{"hand":"both","name":"finger_tapping_both_0","order":0,"config":{"mode":"bilateral","fingers":{"ring":true,"index":true,"pinky":true,"thumb":true,"middle":true}},"posture":"pronation","duration":30,"repetitions":5,"instructions":"","movementType":"finger_tapping"}],"private":false,"created_at":"2026-01-21 21:26:15.298699+00","deleted_at":null}]}
+
+also we need to prepare the lstm model implementation in the backend and the docker container
+next we need the analysis methodology per stage and selected events in the movement of the protocol
+next based on that: we must clinically analyze the data and generate the plot.png; report.pdf; and the analyzed_data.xlsx and make save it in the GSC path also make it visible on the frontend on the patient page:
+
+for the data analysis: Use the advance adaptive Dynamic and self calibrating thresholds and the filters
+                               * **Gaussian smoothing** — Blurs high-frequency jitter by averaging nearby frames with a bell-curve weighting.
+                               * **Adaptive Gaussian** — Automatically widens/narrows the Gaussian kernel based on local noise or motion speed.
+                               * **Moving Average (rolling mean)** — Simple local averaging to reduce jitter (can lag fast movements).
+                               * **Exponential Moving Average (EMA)** — Smooths with recency weighting; reacts faster than rolling mean.
+                               * **Adaptive EMA** — Changes the EMA alpha dynamically (more smoothing when noisy, less when motion is fast).
+                               * **Savitzky–Golay filter** — Fits a local polynomial to preserve peaks/shape while smoothing noise.
+                               * **Adaptive Savitzky–Golay** — Selects window size from cadence/PSD or residual error to avoid over-smoothing events.
+                               * **Butterworth low-pass** — Clean low-pass filter with flat response; removes jitter above cutoff frequency.
+                               * **Adaptive Butterworth cutoff** — Sets cutoff per trial from estimated motion frequency (e.g., step rate) + margin.
+                               * **Chebyshev (Type I/II) low-pass** — Sharper cutoff than Butterworth at the expense of ripple.
+                               * **Elliptic (Cauer) low-pass** — Steepest roll-off for a given order; best when you need aggressive denoising.
+                               * **Notch filter** — Removes a narrowband periodic artifact (e.g., camera/lighting frequency).
+                               * **Wiener filter** — Data-driven denoiser that estimates signal vs noise power automatically.
+                               * **Wavelet denoising (soft threshold)** — Shrinks noisy coefficients while keeping sharp transitions (contacts, peaks).
+                               * **Total Variation (TV) denoising** — Smooths noise but preserves real edges by penalizing abrupt oscillations.
+                               * **LOESS/LOWESS** — Locally weighted regression smoothing that adapts to slow trend changes.
+                               * **Median filter** — Kills impulse spikes (“teleports”) by replacing with local median.
+                               * **Hampel filter (median + MAD)** — Robust spike detector that flags/replaces outliers using rolling median/MAD.
+                               * **MAD gating (robust z-score)** — Rejects points where deviation exceeds k×MAD, resistant to outliers.
+                               * **IQR gating** — Drops values outside Q1−k·IQR to Q3+k·IQR using robust spread.
+                               * **Derivative z-score gating** — Detects outliers by abnormal velocity/acceleration instead of position.
+                               * **Velocity clamp (dynamic)** — Caps frame-to-frame motion using bounds learned from the trial’s typical speed.
+                               * **Acceleration/jerk clamp (dynamic)** — Limits physically impossible acceleration/jerk inferred from the trial.
+                               * **Kalman filter (constant velocity/acceleration)** — Model-based smoothing that handles noise and short dropouts.
+                               * **Adaptive Kalman (innovation-based)** — Updates noise parameters online using residuals so it self-tunes per trial.
+                               * **RTS smoother (Kalman forward+backward)** — Offline pass that yields cleaner trajectories than forward-only Kalman.
+                               * **Particle filter** — Nonlinear, robust tracking when motion is complex and measurements are unreliable.
+                               * **Visibility/confidence weighting** — Trusts measurements less when MediaPipe visibility drops and leans on prediction.
+                               * **Visibility threshold masking** — Treats low-visibility frames as missing to prevent contaminating metrics.
+                               * **Interpolation (linear/spline) on gaps** — Fills short missing segments smoothly before filtering/metric extraction.
+                               * **Shape-preserving interpolation (PCHIP)** — Fills gaps without overshoot, preserving peaks and monotonicity.
+                               * **Cross-view consensus filter** — Uses agreement across synced cameras to down-weight a noisy view dynamically.
+                               * **Dynamic prominence peak detection** — Sets peak prominence as a function of signal variance to avoid fixed thresholds.
+                               * **Adaptive peak distance** — Enforces minimum peak spacing using estimated cadence/period rather than a constant.
+                               * **Baseline-drift correction** — Removes slow drift via high-pass or detrending so thresholds don’t creep over time.
+                               * **Quantile-based thresholds** — Sets thresholds using percentiles (e.g., 90th) so they scale with each trial’s amplitude.
+                               * **Hysteresis thresholding** — Uses separate enter/exit thresholds to prevent rapid on/off flicker near boundaries.
+                               * **Change-point detection (CUSUM/BOCPD)** — Finds motion phase transitions by detecting shifts in mean/variance.
+
+
+  ┌──────────┬────────────────────────────────────────┬────────────────────────────────────────────────┐
+  │ Category │          Current Model Labels          │              Your Required Labels              │
+  ├──────────┼────────────────────────────────────────┼────────────────────────────────────────────────┤
+  │ WRIST    │ None, Rotation-In, Rotation-Out        │ neutral, pronation, supination                 │
+  ├──────────┼────────────────────────────────────────┼────────────────────────────────────────────────┤
+  │ FINGER   │ Thumb/Index/Middle/Ring/Pinky Lift/Tap │ idle, thumb, index, middle, ring, little, etc. │
+  ├──────────┼────────────────────────────────────────┼────────────────────────────────────────────────┤
+  │ POSTURE  │ Neutral, None, Pronation, Supination   │ open, closed, pinch, pointing                  │
+  ├──────────┼────────────────────────────────────────┼────────────────────────────────────────────────┤
+  │ STATE    │ Aperture, Closure, None                │ rest, movement, hold                           │
+  └──────────┴────────────────────────────────────────┴────────────────────────────────────────────────┘

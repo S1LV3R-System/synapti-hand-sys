@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- SynaptiHand App Theme -->
+    <style name="Theme.HandPose" parent="android:Theme.Material.Light.NoActionBar">
+        <!-- Status bar with navy color -->
+        <item name="android:statusBarColor">@color/synaptihand_navy</item>
+        <item name="android:navigationBarColor">@color/background_white</item>
+
+        <!-- Primary colors -->
+        <item name="android:colorPrimary">@color/synaptihand_teal</item>
+        <item name="android:colorPrimaryDark">@color/synaptihand_navy</item>
+        <item name="android:colorAccent">@color/synaptihand_cyan</item>
+
+        <!-- Background -->
+        <item name="android:windowBackground">@color/background_white</item>
+
+        <!-- Light status bar icons (for dark status bar) -->
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+
+    <!-- Splash Screen Theme (optional, for future use) -->
+    <style name="Theme.HandPose.Splash" parent="Theme.HandPose">
+        <item name="android:windowBackground">@color/synaptihand_teal</item>
+    </style>
+</resources>

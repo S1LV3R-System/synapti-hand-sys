@@ -1,0 +1,164 @@
+# ============================================================================
+# CLOUD VM PRODUCTION DEPLOYMENT
+# ============================================================================
+#
+# This configuration is designed for cloud VM deployment using pre-built
+# images from Docker Hub registry: shivamsilver/silver-box
+#
+# Usage:
+#   docker compose -f docker-compose.cloud.yml pull
+#   docker compose -f docker-compose.cloud.yml up -d
+#
+# Requirements:
+#   - Docker and Docker Compose installed on cloud VM
+#   - .env file with production secrets (see .env.production.example)
+#   - GCS service account key at ./secrets/gcs-service-account.json
+#
+# Images:
+#   - shivamsilver/silver-box:synaptihand-app (Application + Redis)
+#   - shivamsilver/silver-box:synaptihand-postgres (PostgreSQL 16)
+#
+# ============================================================================
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: shivamsilver/silver-box:synaptihand-postgres
+    container_name: synaptihand-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-synaptihand}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB:-synaptihand}
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5435:5432"  # External port 5435 to avoid conflict with local PostgreSQL
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-synaptihand} -d ${POSTGRES_DB:-synaptihand}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    # security_opt:
+    #   - no-new-privileges:true  # Commented out - causing permission issues
+    networks:
+      - synaptihand-network
+
+  # SynaptiHand Application (Node.js + Redis)
+  app:
+    image: shivamsilver/silver-box:synaptihand-app
+    container_name: synaptihand-app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "5000:5000"  # Application accessible on port 5000
+    stop_grace_period: 60s
+    stop_signal: SIGTERM
+    environment:
+      # Server Configuration
+      - NODE_ENV=production
+      - PORT=5000
+      - HOST=0.0.0.0
+
+      # PostgreSQL Database Configuration
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-synaptihand}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-synaptihand}?schema=public
+
+      # Authentication (MUST be changed in production)
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-7d}
+
+      # Redis Configuration (embedded in container)
+      - REDIS_HOST=127.0.0.1
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+
+      # CORS Configuration
+      - CORS_ORIGIN=${CORS_ORIGIN:-https://app.synaptihand.com}
+
+      # File Upload Configuration
+      - MAX_FILE_SIZE=${MAX_FILE_SIZE:-524288000}
+      - ALLOWED_VIDEO_TYPES=mp4,avi,mov
+      - TEMP_UPLOAD_DIR=/tmp/synaptihand-uploads
+
+      # Google Cloud Storage Configuration
+      - GCS_BUCKET_NAME=${GCS_BUCKET_NAME:-handpose-system}
+      - GCS_PROJECT_ID=${GCS_PROJECT_ID}
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/secrets/gcs-service-account.json
+      - ENABLE_MOCK_STORAGE=${ENABLE_MOCK_STORAGE:-false}
+
+      # Soft-Delete & Cleanup Configuration
+      - TZ=UTC
+      - CLEANUP_ENABLED=${CLEANUP_ENABLED:-true}
+      - CLEANUP_RETENTION_DAYS=${CLEANUP_RETENTION_DAYS:-15}
+      - CLEANUP_CRON=${CLEANUP_CRON:-0 0 2 * * *}
+
+    volumes:
+      # Persistent data
+      - app-uploads:/app/uploads
+      - app-logs:/var/log/supervisor
+      - app-backups:/app/backups
+      # GCS Service Account Key (mount from host)
+      - ./secrets:/app/secrets:ro
+
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 24G
+          pids: 200
+        reservations:
+          cpus: '1.0'
+          memory: 4G
+
+    # security_opt:
+    #   - no-new-privileges:true  # Commented out - causing permission issues
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+    networks:
+      - synaptihand-network
+
+# Named volumes for data persistence
+volumes:
+  postgres-data:
+    driver: local
+    name: synaptihand-postgres-data
+
+  app-uploads:
+    driver: local
+    name: synaptihand-app-uploads
+
+  app-logs:
+    driver: local
+    name: synaptihand-app-logs
+
+  app-backups:
+    driver: local
+    name: synaptihand-app-backups
+
+# Internal network for service communication
+networks:
+  synaptihand-network:
+    driver: bridge
+    name: synaptihand-network

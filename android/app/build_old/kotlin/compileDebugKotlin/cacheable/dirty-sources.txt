@@ -1,0 +1,5 @@
+/project/app/src/main/java/com/handpose/app/camera/CameraManager.kt
+/project/app/src/main/java/com/handpose/app/data/UploadWorker.kt
+/project/app/src/main/java/com/handpose/app/ml/HandPoseDetector.kt
+/project/app/src/main/java/com/handpose/app/HandPoseApplication.kt
+/project/app/src/main/java/com/handpose/app/MainActivity.kt

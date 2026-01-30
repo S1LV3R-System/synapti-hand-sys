@@ -1,0 +1,96 @@
+# HandPose Platform - Unified Docker Compose
+# Single command deployment: docker compose up -d
+# Stop all services: docker compose down
+
+services:
+  # Redis Cache Service
+  redis:
+    image: redis:7-alpine
+    container_name: handpose-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"  # Only expose if needed for external monitoring
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    networks:
+      - handpose-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  # HandPose Web Application (Frontend + Backend)
+  handpose:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: handpose-platform:latest
+    container_name: handpose-app
+    restart: unless-stopped
+    ports:
+      - "5000:5000"  # Main application port
+    environment:
+      # Server Configuration
+      - NODE_ENV=production
+      - PORT=5000
+      - HOST=0.0.0.0
+
+      # Database Configuration
+      - DATABASE_URL=file:/app/data/handpose.db
+
+      # Authentication
+      - JWT_SECRET=${JWT_SECRET:-zZyn5L83dyH7EkZnCjbzfCTz3Vt2UnHH3VMgT8UNr/Q=}
+      - JWT_EXPIRES_IN=7d
+
+      # Redis Configuration (internal network)
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+
+      # CORS Configuration
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:5000}
+
+      # File Upload Configuration
+      - MAX_FILE_SIZE=524288000
+      - ALLOWED_VIDEO_TYPES=mp4,avi,mov
+      - TEMP_UPLOAD_DIR=/tmp/handpose-uploads
+    volumes:
+      # Persistent data
+      - handpose-data:/app/data
+      - handpose-uploads:/app/uploads
+      - upload-temp:/tmp/handpose-uploads
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - handpose-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+# Named volumes for data persistence
+volumes:
+  handpose-data:
+    driver: local
+    name: handpose-data
+  handpose-uploads:
+    driver: local
+    name: handpose-uploads
+  redis-data:
+    driver: local
+    name: handpose-redis-data
+  upload-temp:
+    driver: local
+    name: handpose-upload-temp
+
+# Internal network for service communication
+networks:
+  handpose-network:
+    driver: bridge
+    name: handpose-network

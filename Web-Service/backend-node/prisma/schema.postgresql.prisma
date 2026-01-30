@@ -1,0 +1,954 @@
+// ============================================================================
+// SYNAPTIHAND POSTGRESQL PRISMA SCHEMA
+// Version: 2.0.0 - PostgreSQL Migration
+// ============================================================================
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// ENUM DEFINITIONS
+// ============================================================================
+
+enum UserRole {
+  patient
+  clinician
+  researcher
+  admin
+}
+
+enum ApprovalStatus {
+  pending
+  approved
+  rejected
+}
+
+enum GenderType {
+  male
+  female
+  other
+  prefer_not_to_say
+}
+
+enum ProjectRole {
+  owner
+  admin
+  member
+  viewer
+}
+
+enum InvitationStatus {
+  pending
+  accepted
+  rejected
+  expired
+}
+
+enum RecordingStatus {
+  created
+  keypoints_uploaded
+  analyzing
+  video_uploaded
+  completed
+  error
+  // Legacy states for backward compatibility
+  uploaded
+  processing
+  processed
+  analyzed
+  failed
+}
+
+enum ReviewStatus {
+  pending
+  approved
+  flagged
+  rejected
+}
+
+enum AnnotationType {
+  observation
+  diagnosis
+  recommendation
+  flag
+  note
+}
+
+enum SeverityLevel {
+  low
+  medium
+  high
+  critical
+}
+
+enum ReportType {
+  clinical
+  research
+  comparison
+  progress
+  summary
+}
+
+enum ComparisonType {
+  longitudinal
+  bilateral
+  treatment_response
+  baseline
+}
+
+enum ChangeAssessment {
+  improved
+  stable
+  declined
+  inconclusive
+}
+
+enum ImageSource {
+  android_screenshot
+  backend_generated
+  clinician_upload
+  system
+}
+
+enum ImageType {
+  labeled_frame
+  screenshot
+  annotation_image
+  overlay
+  thumbnail
+}
+
+enum AuditStatus {
+  success
+  failure
+  warning
+}
+
+enum AdminNoteType {
+  general
+  approval
+  rejection
+  info_request
+  warning
+}
+
+enum AnalysisType {
+  comprehensive
+  tremor_focused
+  rom_focused
+  coordination
+  custom
+}
+
+enum LstmCategory {
+  WRIST
+  FINGER
+  POSTURE
+  STATE
+}
+
+enum ClinicalSpecialty {
+  neurology
+  orthopedics
+  physical_therapy
+  occupational_therapy
+  rehabilitation
+  general
+}
+
+enum DiagnosisCategory {
+  parkinsons
+  essential_tremor
+  stroke_recovery
+  multiple_sclerosis
+  cerebral_palsy
+  peripheral_neuropathy
+  carpal_tunnel
+  arthritis
+  healthy_control
+  other
+}
+
+// ============================================================================
+// AUTHENTICATION & USER MANAGEMENT
+// ============================================================================
+
+model User {
+  id            String    @id @default(uuid()) @db.Uuid
+  email         String    @unique @db.VarChar(255)
+  passwordHash  String    @map("password_hash") @db.VarChar(255)
+  firstName     String?   @map("first_name") @db.VarChar(100)
+  lastName      String?   @map("last_name") @db.VarChar(100)
+  fullName      String?   @map("full_name") @db.VarChar(200)
+  role          UserRole  @default(patient)
+
+  // Registration fields
+  phoneNumber   String?   @map("phone_number") @db.VarChar(20)
+  hospital      String?   @db.VarChar(255)
+  department    String?   @db.VarChar(255)
+
+  // Clinical context for clinicians
+  licenseNumber String?   @map("license_number") @db.VarChar(50)
+  licenseState  String?   @map("license_state") @db.VarChar(50)
+  specialty     ClinicalSpecialty?
+  organization  String?   @db.VarChar(255)
+
+  // Email verification
+  emailVerified     Boolean   @default(false) @map("email_verified")
+  emailVerifiedAt   DateTime? @map("email_verified_at") @db.Timestamptz
+
+  // Account approval workflow
+  approvalStatus    ApprovalStatus @default(pending) @map("approval_status")
+  approvedBy        String?   @map("approved_by") @db.Uuid
+  approvedAt        DateTime? @map("approved_at") @db.Timestamptz
+  rejectionReason   String?   @map("rejection_reason") @db.Text
+  rejectedAt        DateTime? @map("rejected_at") @db.Timestamptz
+
+  // Registration metadata
+  registrationIp     String?  @map("registration_ip") @db.Inet
+  registrationDevice Json?    @map("registration_device") @db.JsonB
+
+  // Account status
+  isActive      Boolean   @default(true) @map("is_active")
+  accountExpiresAt DateTime? @map("account_expires_at") @db.Timestamptz
+  lastLogin     DateTime? @map("last_login") @db.Timestamptz
+
+  // Timestamps
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz
+
+  // Relationships
+  sessions              Session[]
+  auditLogs             AuditLog[]
+  patientRecordings     RecordingSession[] @relation("PatientRecordings")
+  clinicianRecordings   RecordingSession[] @relation("ClinicianRecordings")
+  reviewedRecordings    RecordingSession[] @relation("ReviewerRecordings")
+  protocols             Protocol[]
+  annotations           ClinicalAnnotation[]
+  ownedProjects         Project[] @relation("ProjectOwner")
+  sharedProjects        ProjectMember[]
+  createdPatients       Patient[] @relation("PatientCreator")
+  adminNotes            AdminNote[] @relation("AdminNotes")
+  adminActions          AdminNote[] @relation("AdminActions")
+  sentInvitations       ProjectInvitation[] @relation("SentInvitations")
+  apiKeys               ApiKey[]
+  approver              User?  @relation("UserApprover", fields: [approvedBy], references: [id])
+  approvedUsers         User[] @relation("UserApprover")
+  uploadedLabelImages   LabelImage[] @relation("LabelImageUploader")
+  resolvedAnnotations   ClinicalAnnotation[] @relation("AnnotationResolver")
+  generatedReports      Report[] @relation("ReportGenerator")
+  addedMembers          ProjectMember[] @relation("MemberAdder")
+  revokedApiKeys        ApiKey[] @relation("ApiKeyRevoker")
+
+  @@index([email])
+  @@index([role])
+  @@index([isActive])
+  @@index([approvalStatus])
+  @@index([emailVerified])
+  @@index([deletedAt])
+  @@index([createdAt])
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  tokenHash String   @unique @map("token_hash") @db.VarChar(64)
+  expiresAt DateTime @map("expires_at") @db.Timestamptz
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  // Additional session metadata
+  ipAddress  String? @map("ip_address") @db.Inet
+  userAgent  String? @map("user_agent") @db.Text
+  deviceInfo Json?   @map("device_info") @db.JsonB
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model AuditLog {
+  id         Int         @id @default(autoincrement())
+  userId     String?     @map("user_id") @db.Uuid
+  action     String      @db.VarChar(100)
+  resource   String?     @db.VarChar(100)
+  resourceId String?     @map("resource_id") @db.Uuid
+  details    Json?       @db.JsonB
+  ipAddress  String?     @map("ip_address") @db.Inet
+  userAgent  String?     @map("user_agent") @db.Text
+  status     AuditStatus @default(success)
+  createdAt  DateTime    @default(now()) @map("created_at") @db.Timestamptz
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([action])
+  @@index([resource])
+  @@index([status])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ============================================================================
+// PROJECT MANAGEMENT
+// ============================================================================
+
+model Project {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @db.VarChar(255)
+  description String?  @db.Text
+
+  // Owner and collaboration
+  ownerId     String   @map("owner_id") @db.Uuid
+  isPublic    Boolean  @default(false) @map("is_public")
+
+  // Project settings
+  settings    Json     @default("{}") @db.JsonB
+
+  // Metadata
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+
+  // Relationships
+  owner       User @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  members     ProjectMember[]
+  patients    Patient[]
+  recordings  RecordingSession[] @relation("ProjectRecordings")
+  invitations ProjectInvitation[]
+
+  @@index([ownerId])
+  @@index([isPublic])
+  @@index([createdAt])
+  @@index([deletedAt])
+  @@map("projects")
+}
+
+model ProjectMember {
+  id          String      @id @default(uuid()) @db.Uuid
+  projectId   String      @map("project_id") @db.Uuid
+  userId      String      @map("user_id") @db.Uuid
+  role        ProjectRole @default(member)
+  addedAt     DateTime    @default(now()) @map("added_at") @db.Timestamptz
+  addedById   String?     @map("added_by_id") @db.Uuid
+
+  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  addedBy     User?   @relation("MemberAdder", fields: [addedById], references: [id], onDelete: SetNull)
+
+  @@unique([projectId, userId])
+  @@index([projectId])
+  @@index([userId])
+  @@map("project_members")
+}
+
+model ProjectInvitation {
+  id           String           @id @default(uuid()) @db.Uuid
+  projectId    String           @map("project_id") @db.Uuid
+  invitedEmail String           @map("invited_email") @db.VarChar(255)
+  invitedById  String           @map("invited_by_id") @db.Uuid
+  role         ProjectRole      @default(member)
+  status       InvitationStatus @default(pending)
+
+  expiresAt    DateTime  @map("expires_at") @db.Timestamptz
+  acceptedAt   DateTime? @map("accepted_at") @db.Timestamptz
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  project      Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  invitedBy    User    @relation("SentInvitations", fields: [invitedById], references: [id])
+
+  @@unique([projectId, invitedEmail])
+  @@index([projectId])
+  @@index([invitedEmail])
+  @@index([status])
+  @@map("project_invitations")
+}
+
+// ============================================================================
+// PATIENT MANAGEMENT
+// ============================================================================
+
+model Patient {
+  id            String    @id @default(uuid()) @db.Uuid
+
+  // Patient identification
+  patientId     String    @unique @map("patient_id") @db.VarChar(100)
+  patientName   String    @map("patient_name") @db.VarChar(255)
+  gender        GenderType?
+  dateOfBirth   DateTime? @map("date_of_birth") @db.Date
+
+  // Physical characteristics
+  height        Float?    @db.Decimal(5, 2) // cm
+  weight        Float?    @db.Decimal(5, 2) // kg
+
+  // Clinical diagnosis
+  diagnosis     DiagnosisCategory?
+  diagnosisDetails String? @map("diagnosis_details") @db.Text
+
+  // Project association
+  projectId     String    @map("project_id") @db.Uuid
+
+  // Medical information
+  medicalHistory Json     @default("{}") @map("medical_history") @db.JsonB
+  medications    Json     @default("[]") @db.JsonB
+  notes         String?   @db.Text
+
+  // Metadata
+  createdById   String    @map("created_by_id") @db.Uuid
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz
+
+  // Relationships
+  project       Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy     User    @relation("PatientCreator", fields: [createdById], references: [id])
+  recordings    RecordingSession[] @relation("PatientRecordings")
+
+  @@index([projectId])
+  @@index([createdById])
+  @@index([patientId])
+  @@index([diagnosis])
+  @@index([deletedAt])
+  @@map("patients")
+}
+
+// ============================================================================
+// PROTOCOL TEMPLATES
+// ============================================================================
+
+model Protocol {
+  id            String   @id @default(uuid()) @db.Uuid
+  name          String   @db.VarChar(255)
+  description   String?  @db.Text
+  version       String   @default("1.0") @db.VarChar(20)
+
+  // Protocol configuration
+  configuration Json     @default("{}") @db.JsonB
+
+  // Clinical context
+  indicatedFor     String[] @map("indicated_for")
+  contraindications String[] @default([])
+
+  // Metadata
+  createdById   String   @map("created_by_id") @db.Uuid
+  isPublic      Boolean  @default(false) @map("is_public")
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz
+
+  createdBy  User @relation(fields: [createdById], references: [id])
+  recordings RecordingSession[]
+
+  @@index([createdById])
+  @@index([isPublic])
+  @@index([isActive])
+  @@index([deletedAt])
+  @@map("protocols")
+}
+
+// ============================================================================
+// RECORDING SESSIONS
+// ============================================================================
+
+model RecordingSession {
+  id          String   @id @default(uuid()) @db.Uuid
+
+  // Patient and clinical context
+  patientModelId String? @map("patient_model_id") @db.Uuid
+  patientUserId  String? @map("patient_user_id") @db.Uuid
+  clinicianId    String? @map("clinician_id") @db.Uuid
+  protocolId     String? @map("protocol_id") @db.Uuid
+  projectId      String? @map("project_id") @db.Uuid
+
+  // Mobile session identification
+  mobileSessionId String? @unique @map("mobile_session_id") @db.VarChar(100)
+
+  // Recording metadata
+  recordingDate DateTime @default(now()) @map("recording_date") @db.Timestamptz
+  duration      Int?     @map("duration_seconds")
+  fps           Int?
+
+  // Device information
+  deviceInfo    Json?    @map("device_info") @db.JsonB
+
+  // File storage paths (GCS)
+  keypointsPath String?  @map("keypoints_path") @db.Text
+  metadataPath  String?  @map("metadata_path") @db.Text
+  videoPath     String?  @map("video_path") @db.Text
+  csvPath       String?  @map("csv_path") @db.Text
+
+  // Parallel upload timestamps
+  keypointsUploadedAt DateTime? @map("keypoints_uploaded_at") @db.Timestamptz
+  videoUploadedAt     DateTime? @map("video_uploaded_at") @db.Timestamptz
+
+  // Analysis tracking
+  analysisStartedAt   DateTime? @map("analysis_started_at") @db.Timestamptz
+  analysisCompletedAt DateTime? @map("analysis_completed_at") @db.Timestamptz
+  analysisError       String?   @map("analysis_error") @db.Text
+  analysisProgress    Int?      @default(0) @map("analysis_progress") @db.SmallInt
+
+  // Processing workflow status
+  status        RecordingStatus @default(created)
+
+  // Processing metadata
+  processingMetadata Json? @map("processing_metadata") @db.JsonB
+
+  // Clinical notes
+  clinicalNotes String?  @map("clinical_notes") @db.Text
+
+  // Review tracking
+  reviewedById  String?      @map("reviewed_by_id") @db.Uuid
+  reviewedAt    DateTime?    @map("reviewed_at") @db.Timestamptz
+  reviewStatus  ReviewStatus @default(pending) @map("review_status")
+
+  // Timestamps
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz
+
+  // Relationships
+  patientModel  Patient?  @relation("PatientRecordings", fields: [patientModelId], references: [id], onDelete: SetNull)
+  patientUser   User?     @relation("PatientRecordings", fields: [patientUserId], references: [id], onDelete: SetNull)
+  clinician     User?     @relation("ClinicianRecordings", fields: [clinicianId], references: [id], onDelete: SetNull)
+  protocol      Protocol? @relation(fields: [protocolId], references: [id], onDelete: SetNull)
+  project       Project?  @relation("ProjectRecordings", fields: [projectId], references: [id], onDelete: SetNull)
+  reviewer      User?     @relation("ReviewerRecordings", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  signalProcessingResults SignalProcessingResult[]
+  clinicalAnalyses        ClinicalAnalysis[]
+  lstmEventDetections     LSTMEventDetection[]
+  reports                 Report[]
+  annotations             ClinicalAnnotation[]
+  labelImages             LabelImage[]
+  comparisons             RecordingComparison[] @relation("ComparedRecordings")
+  baselineComparisons     RecordingComparison[] @relation("BaselineRecordings")
+
+  @@index([patientModelId])
+  @@index([patientUserId])
+  @@index([clinicianId])
+  @@index([protocolId])
+  @@index([projectId])
+  @@index([mobileSessionId])
+  @@index([status])
+  @@index([recordingDate])
+  @@index([reviewStatus])
+  @@index([createdAt])
+  @@index([deletedAt])
+  @@map("recording_sessions")
+}
+
+// ============================================================================
+// SIGNAL PROCESSING RESULTS
+// ============================================================================
+
+model SignalProcessingResult {
+  id                 String   @id @default(uuid()) @db.Uuid
+  recordingSessionId String   @map("recording_session_id") @db.Uuid
+
+  // Processing configuration
+  processingVersion String   @default("1.0") @map("processing_version") @db.VarChar(20)
+  filtersApplied    String[] @map("filters_applied")
+
+  // Raw landmark data
+  rawLandmarks      Json     @map("raw_landmarks") @db.JsonB
+
+  // Filtered data storage
+  butterworth          Json? @db.JsonB
+  kalman               Json? @db.JsonB
+  savitzkyGolay        Json? @map("savitzky_golay") @db.JsonB
+  movingAverage        Json? @map("moving_average") @db.JsonB
+  exponentialSmoothing Json? @map("exponential_smoothing") @db.JsonB
+  fftFiltered          Json? @map("fft_filtered") @db.JsonB
+  waveletDenoised      Json? @map("wavelet_denoised") @db.JsonB
+  particleFilter       Json? @map("particle_filter") @db.JsonB
+  unscentedKalman      Json? @map("unscented_kalman") @db.JsonB
+
+  // Quality metrics
+  qualityMetrics    Json?    @map("quality_metrics") @db.JsonB
+
+  // Processing performance
+  processingTime    Int?     @map("processing_time_ms")
+
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  recordingSession RecordingSession @relation(fields: [recordingSessionId], references: [id], onDelete: Cascade)
+
+  @@index([recordingSessionId])
+  @@index([processingVersion])
+  @@index([createdAt])
+  @@map("signal_processing_results")
+}
+
+// ============================================================================
+// CLINICAL ANALYSIS & METRICS
+// ============================================================================
+
+model ClinicalAnalysis {
+  id                 String       @id @default(uuid()) @db.Uuid
+  recordingSessionId String       @map("recording_session_id") @db.Uuid
+
+  // Analysis configuration
+  analysisVersion   String       @default("1.0") @map("analysis_version") @db.VarChar(20)
+  analysisType      AnalysisType @default(comprehensive) @map("analysis_type")
+
+  // Tremor metrics
+  tremorFrequency   Float?   @map("tremor_frequency_hz") @db.Decimal(6, 3)
+  tremorAmplitude   Float?   @map("tremor_amplitude_mm") @db.Decimal(8, 3)
+  tremorRegularity  Float?   @map("tremor_regularity") @db.Decimal(4, 3)
+  dominantFrequency Float?   @map("dominant_frequency_hz") @db.Decimal(6, 3)
+
+  // Frequency spectrum
+  frequencySpectrum Json?    @map("frequency_spectrum") @db.JsonB
+
+  // Smoothness metrics
+  sparc             Float?   @db.Decimal(10, 6)
+  ldljv             Float?   @db.Decimal(10, 6)
+  normalizedJerk    Float?   @map("normalized_jerk") @db.Decimal(10, 6)
+
+  // Range of Motion
+  romMeasurements   Json?    @map("rom_measurements") @db.JsonB
+
+  // Asymmetry analysis
+  asymmetryIndex    Float?   @map("asymmetry_index") @db.Decimal(4, 3)
+  asymmetryDetails  Json?    @map("asymmetry_details") @db.JsonB
+
+  // Coordination scores
+  coordinationScore Float?   @map("coordination_score") @db.Decimal(5, 2)
+  reactionTime      Float?   @map("reaction_time_ms") @db.Decimal(8, 2)
+  movementAccuracy  Float?   @map("movement_accuracy") @db.Decimal(4, 3)
+
+  // Clinical severity scoring
+  severityScores    Json?    @map("severity_scores") @db.JsonB
+
+  // Overall assessment
+  overallScore      Float?   @map("overall_score") @db.Decimal(5, 2)
+  clinicalSummary   String?  @map("clinical_summary") @db.Text
+
+  // Confidence and quality
+  confidence        Float    @default(0.0) @db.Decimal(4, 3)
+  qualityFlags      String[] @map("quality_flags")
+
+  // Timestamps
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  recordingSession RecordingSession @relation(fields: [recordingSessionId], references: [id], onDelete: Cascade)
+
+  @@index([recordingSessionId])
+  @@index([analysisVersion])
+  @@index([analysisType])
+  @@index([createdAt])
+  @@map("clinical_analyses")
+}
+
+// ============================================================================
+// LSTM EVENT DETECTION
+// ============================================================================
+
+model LSTMEventDetection {
+  id                 String       @id @default(uuid()) @db.Uuid
+  recordingSessionId String       @map("recording_session_id") @db.Uuid
+
+  // Event category
+  category          LstmCategory
+
+  // Event identification
+  eventType         String       @map("event_type") @db.VarChar(100)
+  label             String?      @db.VarChar(255)
+
+  // Temporal information
+  startFrame        Int          @map("start_frame")
+  endFrame          Int          @map("end_frame")
+  durationFrames    Int          @map("duration_frames")
+  durationSeconds   Float        @map("duration_seconds") @db.Decimal(10, 4)
+
+  // LSTM confidence scores
+  confidence        Float        @db.Decimal(4, 3)
+  peakConfidence    Float        @map("peak_confidence") @db.Decimal(4, 3)
+
+  // Raw LSTM predictions
+  rawPredictions    Json?        @map("raw_predictions") @db.JsonB
+
+  createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz
+
+  recordingSession RecordingSession @relation(fields: [recordingSessionId], references: [id], onDelete: Cascade)
+
+  @@index([recordingSessionId])
+  @@index([category])
+  @@index([eventType])
+  @@index([startFrame])
+  @@map("lstm_event_detections")
+}
+
+// ============================================================================
+// CLINICAL ANNOTATIONS
+// ============================================================================
+
+model ClinicalAnnotation {
+  id                 String         @id @default(uuid()) @db.Uuid
+  recordingSessionId String         @map("recording_session_id") @db.Uuid
+  clinicianId        String         @map("clinician_id") @db.Uuid
+
+  // Annotation content
+  annotationType    AnnotationType @map("annotation_type")
+  content           String         @db.Text
+  severity          SeverityLevel?
+
+  // Temporal reference
+  timestampStart    Float?   @map("timestamp_start_sec") @db.Decimal(10, 4)
+  timestampEnd      Float?   @map("timestamp_end_sec") @db.Decimal(10, 4)
+
+  // Resolution tracking
+  isResolved        Boolean  @default(false) @map("is_resolved")
+  resolvedAt        DateTime? @map("resolved_at") @db.Timestamptz
+  resolvedBy        String?  @map("resolved_by") @db.Uuid
+
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  recordingSession RecordingSession @relation(fields: [recordingSessionId], references: [id], onDelete: Cascade)
+  clinician        User             @relation(fields: [clinicianId], references: [id])
+  resolver         User?            @relation("AnnotationResolver", fields: [resolvedBy], references: [id], onDelete: SetNull)
+  labelImages      LabelImage[]
+
+  @@index([recordingSessionId])
+  @@index([clinicianId])
+  @@index([annotationType])
+  @@index([isResolved])
+  @@map("clinical_annotations")
+}
+
+// ============================================================================
+// LABEL IMAGES & FRAME ANNOTATIONS
+// ============================================================================
+
+model LabelImage {
+  id                 String      @id @default(uuid()) @db.Uuid
+  recordingSessionId String      @map("recording_session_id") @db.Uuid
+
+  // Source and type
+  imageSource       ImageSource @map("image_source")
+  imageType         ImageType   @map("image_type")
+
+  // Temporal reference
+  frameNumber       Int?        @map("frame_number")
+  timestamp         Float?      @map("timestamp_sec") @db.Decimal(10, 4)
+
+  // Storage paths
+  imagePath         String      @map("image_path") @db.Text
+  thumbnailPath     String?     @map("thumbnail_path") @db.Text
+
+  // Image metadata
+  width             Int?        @map("width_px")
+  height            Int?        @map("height_px")
+  fileSize          Int?        @map("file_size_bytes")
+  mimeType          String?     @map("mime_type") @db.VarChar(50)
+
+  // Landmarks data
+  landmarksData     Json?       @map("landmarks_data") @db.JsonB
+
+  // Link to annotation
+  annotationId      String?     @map("annotation_id") @db.Uuid
+
+  // Descriptive information
+  title             String?     @db.VarChar(255)
+  description       String?     @db.Text
+  tags              String[]    @default([])
+
+  // Upload metadata
+  uploadedBy        String?     @map("uploaded_by") @db.Uuid
+  deviceInfo        Json?       @map("device_info") @db.JsonB
+
+  // Processing flags
+  isProcessed       Boolean     @default(false) @map("is_processed")
+  overlaysApplied   String[]    @map("overlays_applied") @default([])
+
+  // Visibility
+  isPublic          Boolean     @default(false) @map("is_public")
+
+  createdAt         DateTime    @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime    @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt         DateTime?   @map("deleted_at") @db.Timestamptz
+
+  recordingSession  RecordingSession    @relation(fields: [recordingSessionId], references: [id], onDelete: Cascade)
+  annotation        ClinicalAnnotation? @relation(fields: [annotationId], references: [id], onDelete: SetNull)
+  uploader          User?               @relation("LabelImageUploader", fields: [uploadedBy], references: [id], onDelete: SetNull)
+
+  @@index([recordingSessionId])
+  @@index([imageSource])
+  @@index([imageType])
+  @@index([frameNumber])
+  @@index([annotationId])
+  @@index([createdAt])
+  @@index([deletedAt])
+  @@map("label_images")
+}
+
+// ============================================================================
+// REPORTS
+// ============================================================================
+
+model Report {
+  id                 String     @id @default(uuid()) @db.Uuid
+  recordingSessionId String     @map("recording_session_id") @db.Uuid
+
+  // Report metadata
+  reportType        ReportType @map("report_type")
+  title             String     @db.VarChar(255)
+  summary           String?    @db.Text
+
+  // Storage
+  pdfPath           String?    @map("pdf_path") @db.Text
+
+  // Configuration
+  configuration     Json?      @db.JsonB
+
+  // Generation metadata
+  generatedBy       String?    @map("generated_by") @db.Uuid
+  generatedAt       DateTime   @default(now()) @map("generated_at") @db.Timestamptz
+  version           String     @default("1.0") @db.VarChar(20)
+
+  // Access control
+  isShared          Boolean    @default(false) @map("is_shared")
+  sharedWith        String[]   @map("shared_with") @default([]) @db.Uuid
+
+  createdAt         DateTime   @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime   @updatedAt @map("updated_at") @db.Timestamptz
+
+  recordingSession RecordingSession @relation(fields: [recordingSessionId], references: [id], onDelete: Cascade)
+  generator        User?            @relation("ReportGenerator", fields: [generatedBy], references: [id], onDelete: SetNull)
+
+  @@index([recordingSessionId])
+  @@index([reportType])
+  @@index([generatedAt])
+  @@index([isShared])
+  @@map("reports")
+}
+
+// ============================================================================
+// COMPARISON & LONGITUDINAL TRACKING
+// ============================================================================
+
+model RecordingComparison {
+  id                  String          @id @default(uuid()) @db.Uuid
+  baselineRecordingId String          @map("baseline_recording_id") @db.Uuid
+  comparedRecordingId String          @map("compared_recording_id") @db.Uuid
+
+  // Comparison type
+  comparisonType      ComparisonType  @map("comparison_type")
+
+  // Computed differences
+  metricDifferences   Json            @map("metric_differences") @db.JsonB
+
+  // Overall change assessment
+  overallChange       ChangeAssessment? @map("overall_change")
+  changeScore         Float?          @map("change_score") @db.Decimal(6, 2)
+
+  // Statistical tests
+  statisticalTests    Json?           @map("statistical_tests") @db.JsonB
+
+  // Clinical notes
+  clinicalNotes       String?         @map("clinical_notes") @db.Text
+
+  createdAt           DateTime        @default(now()) @map("created_at") @db.Timestamptz
+
+  baselineRecording RecordingSession @relation("BaselineRecordings", fields: [baselineRecordingId], references: [id], onDelete: Cascade)
+  comparedRecording RecordingSession @relation("ComparedRecordings", fields: [comparedRecordingId], references: [id], onDelete: Cascade)
+
+  @@index([baselineRecordingId])
+  @@index([comparedRecordingId])
+  @@index([comparisonType])
+  @@index([createdAt])
+  @@map("recording_comparisons")
+}
+
+// ============================================================================
+// ADMIN & USER MANAGEMENT
+// ============================================================================
+
+model AdminNote {
+  id        String        @id @default(uuid()) @db.Uuid
+  userId    String        @map("user_id") @db.Uuid
+  adminId   String        @map("admin_id") @db.Uuid
+  content   String        @db.Text
+  noteType  AdminNoteType @default(general) @map("note_type")
+  isInternal Boolean      @default(true) @map("is_internal")
+  createdAt DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime      @updatedAt @map("updated_at") @db.Timestamptz
+
+  user  User @relation("AdminNotes", fields: [userId], references: [id], onDelete: Cascade)
+  admin User @relation("AdminActions", fields: [adminId], references: [id])
+
+  @@index([userId])
+  @@index([adminId])
+  @@index([noteType])
+  @@index([createdAt])
+  @@map("admin_notes")
+}
+
+model EmailVerification {
+  id        String   @id @default(uuid()) @db.Uuid
+  email     String   @db.VarChar(255)
+  code      String   @db.VarChar(6)
+  expiresAt DateTime @map("expires_at") @db.Timestamptz
+  verified  Boolean  @default(false)
+  attempts  Int      @default(0) @db.SmallInt
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([email])
+  @@index([code])
+  @@index([expiresAt])
+  @@map("email_verifications")
+}
+
+// ============================================================================
+// API KEY MANAGEMENT
+// ============================================================================
+
+model ApiKey {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+
+  // Key identification
+  name        String    @db.VarChar(100)
+  keyHash     String    @unique @map("key_hash") @db.VarChar(64)
+  keyPrefix   String    @map("key_prefix") @db.VarChar(12)
+
+  // Permissions
+  permissions String[]  @default(["read"])
+
+  // Usage tracking
+  lastUsedAt  DateTime? @map("last_used_at") @db.Timestamptz
+  usageCount  Int       @default(0) @map("usage_count")
+
+  // Lifecycle
+  isActive    Boolean   @default(true) @map("is_active")
+  expiresAt   DateTime? @map("expires_at") @db.Timestamptz
+  revokedAt   DateTime? @map("revoked_at") @db.Timestamptz
+  revokedBy   String?   @map("revoked_by") @db.Uuid
+
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  revoker     User?     @relation("ApiKeyRevoker", fields: [revokedBy], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([keyHash])
+  @@index([keyPrefix])
+  @@index([isActive])
+  @@map("api_keys")
+}

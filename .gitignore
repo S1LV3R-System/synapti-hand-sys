@@ -1,0 +1,48 @@
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node/npm
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# OS
+.DS_Store
+Thumbs.db
+.env
+.env.local
+
+# Android build artifacts
+android/build/
+android/.gradle/
+android/.idea/
+android/local.properties
+android/*.hprof
+android/app/build/
+
+# Project specific
+ziBVaucE/
+*.log
+.gradle/
+.classpath
+.project
+.settings/
+build/

@@ -1,0 +1,33 @@
+# ============================================================================
+# SYNAPTIHAND POSTGRESQL DOCKERFILE
+# Custom PostgreSQL 16 image with initialization scripts
+# ============================================================================
+#
+# Registry: shivamsilver/silver-box:synaptihand-postgres
+#
+# This image includes:
+# - PostgreSQL 16 (Alpine-based for smaller size)
+# - UUID, pg_trgm, btree_gin extensions pre-configured
+# - Custom initialization script
+#
+# ============================================================================
+
+FROM postgres:16-alpine
+
+LABEL maintainer="SynaptiHand Team"
+LABEL description="PostgreSQL 16 for SynaptiHand medical platform"
+LABEL version="1.0.0"
+
+# Copy initialization script
+COPY scripts/init-postgres.sql /docker-entrypoint-initdb.d/01-init.sql
+
+# Set default environment variables (can be overridden at runtime)
+ENV POSTGRES_DB=synaptihand
+ENV PGDATA=/var/lib/postgresql/data/pgdata
+
+# Health check
+HEALTHCHECK --interval=10s --timeout=5s --retries=5 --start-period=30s \
+    CMD pg_isready -U ${POSTGRES_USER:-synaptihand} -d ${POSTGRES_DB:-synaptihand}
+
+# Standard PostgreSQL port
+EXPOSE 5432

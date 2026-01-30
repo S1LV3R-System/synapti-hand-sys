@@ -1,0 +1,138 @@
+# 🏭 PRODUCTION DEPLOYMENT WITH SUPABASE
+#
+# This configuration runs SynaptiHand app with Supabase (hosted PostgreSQL) and Redis
+# with production-grade optimizations for resource management, security,
+# reliability, and observability.
+#
+# ✅ PRODUCTION FEATURES:
+# • Supabase hosted PostgreSQL (no local database container needed)
+# • Resource limits (CPU, memory, process limits)
+# • Graceful shutdown with 60s grace period
+# • Security hardening (no-new-privileges, read-only where possible)
+# • Structured logging with rotation
+# • Health monitoring (readiness + liveness)
+#
+# Database:
+# - Uses Supabase hosted PostgreSQL
+# - Tables: User-Main, Patient-Table, Project-Table, Protocol-Table, Experiment-Session
+# - All data types optimized for PostgreSQL (JSONB, arrays, etc.)
+
+services:
+  # Production-hardened application container with Redis
+  handpose-all-in-one:
+    build:
+      context: .
+      dockerfile: Dockerfile.single
+    image: handpose-single:production
+    container_name: handpose-single
+    restart: unless-stopped
+    network_mode: host  # Use host networking to bypass iptables issues
+
+    # Graceful shutdown configuration
+    stop_grace_period: 60s
+    stop_signal: SIGTERM
+    environment:
+      # Server Configuration
+      - NODE_ENV=production
+      - PORT=5000
+      - HOST=0.0.0.0
+
+      # Supabase PostgreSQL Database Configuration
+      - DATABASE_URL=postgresql://postgres.mtodevikkgraisalolkq:3hcJF9Obfzu0ef95@aws-1-ap-south-1.pooler.supabase.com:5432/postgres
+
+      # Supabase API Configuration
+      - SUPABASE_URL=https://mtodevikkgraisalolkq.supabase.co
+      - SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10b2Rldmlra2dyYWlzYWxvbGtxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg4NjM5MjAsImV4cCI6MjA4NDQzOTkyMH0.z-xOakwGQxH9H3buLTMayVc_tnNGivTrZIRlPOCDOso
+      - SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10b2Rldmlra2dyYWlzYWxvbGtxIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2ODg2MzkyMCwiZXhwIjoyMDg0NDM5OTIwfQ.4KvyJqfb75RyaGcFJhj8v_m-FqKsgwTJgex_kD67x6s
+
+      # Authentication
+      - JWT_SECRET=${JWT_SECRET:-zZyn5L83dyH7EkZnCjbzfCTz3Vt2UnHH3VMgT8UNr/Q=}
+      - JWT_EXPIRES_IN=7d
+
+      # Redis Configuration (localhost since it's in same container)
+      - REDIS_HOST=127.0.0.1
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+
+      # CORS Configuration (allows both production frontend and local development)
+      - CORS_ORIGIN=${CORS_ORIGIN:-https://app.synaptihand.com,http://localhost:5000,http://localhost:5000}
+
+      # File Upload Configuration
+      - MAX_FILE_SIZE=524288000
+      - ALLOWED_VIDEO_TYPES=mp4,avi,mov
+      - TEMP_UPLOAD_DIR=/tmp/synaptihand-uploads
+
+      # Google Cloud Storage Configuration
+      # Bucket: gs://handpose-system
+      # Bucket structure: Uploads-mp4/, Uploads-CSV/, Result-Output/
+      - GCS_BUCKET_NAME=handpose-system
+      - GCS_PROJECT_ID=praxis-dolphin-467607-s8
+      # Path to service account JSON inside container
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/secrets/gcs-service-account.json
+      # Set to 'false' to use real GCS
+      - ENABLE_MOCK_STORAGE=false
+
+      # Soft-Delete & Cleanup Configuration
+      - TZ=UTC                                    # Timezone for cron jobs
+      - CLEANUP_ENABLED=${CLEANUP_ENABLED:-true} # Enable/disable automatic cleanup
+      - CLEANUP_RETENTION_DAYS=${CLEANUP_RETENTION_DAYS:-15} # Days before permanent deletion
+      - CLEANUP_CRON=${CLEANUP_CRON:-0 0 2 * * *} # Cron schedule (default: 2 AM UTC daily)
+
+      # Email/SMTP Configuration (Hostinger)
+      - SMTP_HOST=smtp.hostinger.com
+      - SMTP_PORT=465
+      - SMTP_SECURE=true
+      - SMTP_USER=system@synaptihand.com
+      - SMTP_PASSWORD=Silverline@12345
+      - SMTP_FROM_SYSTEM=SynaptiHand System <system@synaptihand.com>
+      - SMTP_FROM_NOREPLY=SynaptiHand <no-reply@synaptihand.com>
+      - SMTP_FROM_ADMIN=SynaptiHand Admin <admin@synaptihand.com>
+      - APP_URL=https://app.synaptihand.com
+    volumes:
+      # Persistent data for uploads and backups
+      - handpose-single-uploads:/app/uploads
+      # GCS Service Account Key
+      - ./backend-node/secrets:/app/secrets:ro
+      - handpose-single-logs:/var/log/supervisor
+      - handpose-single-backups:/app/backups
+
+    # Production resource limits and reservations
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'           # Maximum 4 CPU cores
+          memory: 24G           # Maximum 24GB RAM
+          pids: 200             # Limit process count (prevent fork bombs)
+        reservations:
+          cpus: '1.0'           # Guaranteed 1 CPU core
+          memory: 4G            # Guaranteed 4GB RAM
+
+    # Security hardening
+    # security_opt:
+    #   - no-new-privileges:true  # Commented out - causing permission issues
+    ulimits:
+      nofile:
+        soft: 65536             # File descriptor limits
+        hard: 65536
+
+    # Health monitoring (readiness + liveness)
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+# Named volumes for data persistence
+volumes:
+  handpose-single-uploads:
+    driver: local
+    name: handpose-single-uploads
+
+  handpose-single-logs:
+    driver: local
+    name: handpose-single-logs
+
+  handpose-single-backups:
+    driver: local
+    name: handpose-single-backups

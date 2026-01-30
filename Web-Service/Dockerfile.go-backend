@@ -1,0 +1,39 @@
+# Stage 1: Build Frontend
+FROM node:20-alpine AS frontend-builder
+WORKDIR /app/frontend
+COPY frontend/package*.json ./
+RUN npm install
+COPY frontend/ .
+RUN npm run build
+
+# Stage 2: Build Backend
+FROM golang:1.24-alpine AS backend-builder
+WORKDIR /app/backend
+COPY backend/go.mod backend/go.sum ./
+RUN go mod download
+COPY backend/ .
+# CGO_ENABLED=0 for static binary, using pure Go sqlite driver
+RUN CGO_ENABLED=0 GOOS=linux go build -o webservice main.go
+
+# Stage 3: Runtime
+FROM alpine:latest
+WORKDIR /app
+# Install CA certs for GCS/External calls
+RUN apk --no-cache add ca-certificates
+
+# Copy artifacts
+COPY --from=backend-builder /app/backend/webservice .
+# Copy frontend dist to expected relative path (backend expects ../frontend/dist)
+# We recreate the structure /app/frontend/dist so that from /app where binary is, ../frontend/dist is valid?
+# Wait, binary is at /app/webservice. If it looks for ../frontend/dist, it looks at /frontend/dist.
+# Let's adjust main.go logic or structure here.
+# In main.go: staticPath := "../frontend/dist"
+# If we run from /app, ".." is /. So /frontend/dist.
+RUN mkdir -p /frontend/dist
+COPY --from=frontend-builder /app/frontend/dist /frontend/dist
+
+# Expose port
+EXPOSE 4856
+
+# Run
+CMD ["./webservice"]

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Frontend Test</title>
+</head>
+<body>
+    <h1>Testing Frontend</h1>
+    <div id="test-results"></div>
+    <script>
+        const results = document.getElementById('test-results');
+
+        // Test 1: Vite client
+        fetch('/@vite/client')
+            .then(() => results.innerHTML += '<p>✅ Vite client loaded</p>')
+            .catch(() => results.innerHTML += '<p>❌ Vite client failed</p>');
+
+        // Test 2: Main entry
+        fetch('/src/main.tsx')
+            .then(() => results.innerHTML += '<p>✅ main.tsx loaded</p>')
+            .catch(() => results.innerHTML += '<p>❌ main.tsx failed</p>');
+
+        // Test 3: API
+        fetch('/api/health')
+            .then(r => r.json())
+            .then(data => results.innerHTML += `<p>✅ API: ${data.message}</p>`)
+            .catch(err => results.innerHTML += `<p>❌ API failed: ${err}</p>`);
+
+        // Test 4: Check if React is loading
+        setTimeout(() => {
+            const root = document.getElementById('root');
+            if (root) {
+                results.innerHTML += '<p>⚠️ React root div exists but might be empty</p>';
+            }
+        }, 2000);
+    </script>
+</body>
+</html>

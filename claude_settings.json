@@ -1,0 +1,858 @@
+{
+  "version": "2.0.0",
+  "description": "Claude Code behavioral settings for HandPose Medical Analysis Platform with strict script management and systematic development practices",
+  "metadata": {
+    "created": "2026-01-08",
+    "updated": "2026-01-08",
+    "framework": "SuperClaude",
+    "environment": "Medical Hand Pose Analysis Platform",
+    "language": "Python 3.12.3",
+    "project_type": "Medical Computer Vision Analysis",
+    "architecture": "Microservices on Google Cloud Platform",
+    "primary_documentation": "Project_PRD.md"
+  },
+  "rules": [
+    {
+      "id": "no-script-creation",
+      "name": "Script Creation Restriction",
+      "priority": "critical",
+      "category": "file-operations",
+      "description": "NEVER create new scripts unless explicitly requested by the user. Only modify existing scripts in the /Script directory.",
+      "triggers": [
+        "script creation requests",
+        "utility file generation",
+        "helper script writing",
+        "automation script creation",
+        "new .py file creation"
+      ],
+      "behavior": {
+        "default_action": "modify_existing",
+        "allowed_actions": [
+          "read_existing_scripts",
+          "edit_existing_scripts",
+          "analyze_script_structure",
+          "add_functions_to_existing_scripts",
+          "refactor_existing_code"
+        ],
+        "blocked_actions": [
+          "create_new_script",
+          "write_new_py_file",
+          "generate_utility_files",
+          "create_helper_scripts"
+        ]
+      },
+      "validation": {
+        "pre_execution": [
+          "Verify user explicitly requested new script creation with exact filename",
+          "Confirm no existing script can be modified to serve the purpose",
+          "Check if functionality can be added to Side-Analysis.py, Front-Analysis.py, or IMU-Analysis.py"
+        ],
+        "enforcement": "strict"
+      },
+      "examples": {
+        "allowed": [
+          "User: 'Create a new script called data_processor.py' → Allowed (explicit request with filename)",
+          "User: 'Add a preprocessing function' → Modify existing script",
+          "User: 'Fix the analysis logic' → Edit existing script"
+        ],
+        "blocked": [
+          "Proactively creating helper scripts without explicit request",
+          "Creating utility scripts to solve problems",
+          "Writing new automation scripts without user instruction",
+          "Generating test scripts without explicit permission"
+        ]
+      },
+      "rationale": "Prevents workspace clutter, maintains clean project structure, ensures intentional script creation only when genuinely needed.",
+      "override_conditions": [
+        "User explicitly states: 'create a new script called [filename]'",
+        "User provides specific filename for new script",
+        "Absolutely no existing script can be modified to meet requirements"
+      ]
+    },
+    {
+      "id": "systematic-class-based-development",
+      "name": "Systematic Class-Based Function Organization",
+      "priority": "critical",
+      "category": "code-architecture",
+      "description": "Always make systematic changes by organizing code into classes with well-structured methods. Never create scattered utility functions.",
+      "triggers": [
+        "function creation requests",
+        "code refactoring",
+        "feature additions",
+        "logic implementation"
+      ],
+      "behavior": {
+        "default_approach": "class_based_organization",
+        "required_practices": [
+          "Organize related functions into logical classes",
+          "Use clear class hierarchies for different analysis types",
+          "Create systematic method naming conventions",
+          "Group data processing steps into class methods",
+          "Maintain single responsibility per class",
+          "Use inheritance for shared functionality"
+        ],
+        "prohibited_patterns": [
+          "Scattered standalone utility functions",
+          "Global function definitions without class structure",
+          "Duplicated logic across multiple locations",
+          "Procedural code without object-oriented design"
+        ]
+      },
+      "examples": {
+        "correct": "class HandPoseAnalyzer:\n    def preprocess_data(self): ...\n    def detect_landmarks(self): ...\n    def extract_features(self): ...",
+        "incorrect": "def preprocess_data(): ...\ndef detect_landmarks(): ...\ndef extract_features(): ..."
+      },
+      "rationale": "Systematic class-based organization ensures maintainability, reusability, and clear code structure for medical analysis systems."
+    },
+    {
+      "id": "medical-data-safety",
+      "name": "Medical Data Safety and Privacy",
+      "priority": "critical",
+      "category": "data-security",
+      "description": "Handle patient medical data with extreme care. Never expose, log, or transmit sensitive information.",
+      "behavior": {
+        "data_handling": [
+          "Never print or log patient names, IDs, or identifiable information",
+          "Use anonymized identifiers in debug output",
+          "Ensure all file operations preserve Korean UTF-8 encoding",
+          "Validate data integrity before processing",
+          "Handle missing or corrupted data gracefully"
+        ],
+        "file_operations": [
+          "Preserve original patient data files - never modify source data",
+          "Create outputs in appropriate directories (not in /DATA/Patient/)",
+          "Validate file paths before operations",
+          "Handle Korean filename encoding properly"
+        ],
+        "prohibited_actions": [
+          "Logging patient identifiable information",
+          "Transmitting data outside the system",
+          "Modifying original patient CSV or video files",
+          "Creating copies of patient data in unauthorized locations"
+        ]
+      },
+      "compliance": {
+        "standards": ["HIPAA", "GDPR", "Medical Device Software Standards"],
+        "audit_requirements": [
+          "All data access must be logged (without exposing sensitive data)",
+          "Processing steps must be reproducible",
+          "Error handling must not expose patient information"
+        ]
+      },
+      "rationale": "Medical data requires highest level of protection. Patient privacy and data integrity are non-negotiable requirements."
+    },
+    {
+      "id": "production-logging-requirement",
+      "name": "Comprehensive Production Logging",
+      "priority": "critical",
+      "category": "logging",
+      "description": "Always log production decisions, reasoning processes, and implementation steps to conversation.log. Maintain complete audit trail of all development activities.",
+      "triggers": [
+        "any implementation decision",
+        "code modifications",
+        "architecture changes",
+        "configuration updates",
+        "refactoring operations",
+        "new feature additions"
+      ],
+      "behavior": {
+        "logging_requirements": [
+          "Log EVERY decision with timestamp, level, and category",
+          "Document context, analysis, decision, and rationale for all changes",
+          "Update conversation.log before and after major operations",
+          "Create ADR (Architectural Decision Record) entries for significant decisions",
+          "Maintain chronological session logs with clear boundaries"
+        ],
+        "log_format": {
+          "timestamp": "ISO 8601 format: YYYY-MM-DD HH:MM:SS",
+          "levels": ["INFO", "ANALYSIS", "DECISION", "WARNING", "ERROR", "VALIDATION"],
+          "categories": ["SCRIPT", "CLASS", "FUNCTION", "DATA", "CONFIG", "ARCHITECTURE", "REFACTOR"],
+          "structure": "Context → Analysis → Decision → Rationale flow"
+        },
+        "log_entry_template": "[TIMESTAMP] [LEVEL] [CATEGORY] Message\n  ├─ Context: Background information\n  ├─ Analysis: Reasoning process and options considered\n  ├─ Decision: What was decided and implemented\n  └─ Rationale: Why this decision was made",
+        "required_logging_points": [
+          "Session initialization: Read conversation.log to understand previous decisions",
+          "Before implementation: Log planned approach and reasoning",
+          "During implementation: Log significant choices and tradeoffs",
+          "After implementation: Log outcomes and validation results",
+          "Session end: Summarize completed work and next steps"
+        ]
+      },
+      "validation": {
+        "pre_execution": [
+          "Read conversation.log to understand previous decisions",
+          "Verify no contradictions with past logged decisions",
+          "Check alignment with ADRs and architectural patterns",
+          "Confirm logging approach is documented"
+        ],
+        "during_execution": [
+          "Log decision points as they occur",
+          "Document tradeoffs and alternatives considered",
+          "Record validation results and test outcomes"
+        ],
+        "post_execution": [
+          "Verify all major decisions are logged",
+          "Update ADRs if architectural changes occurred",
+          "Document any deviations from planned approach",
+          "Summarize session outcomes in log"
+        ]
+      },
+      "examples": {
+        "correct_log_entry": "[2026-01-08 12:00:00] [DECISION] [CLASS] Added HandPoseAnalyzer base class\n  ├─ Context: Need shared functionality across different analysis modules\n  ├─ Analysis: Considered options:\n               A. Duplicate code (violates DRY)\n               B. Utility functions (violates class-based rule)\n               C. Base class with inheritance (systematic, reusable)\n  ├─ Decision: Implemented HandPoseAnalyzer base class\n  └─ Rationale: Inheritance provides code reuse while maintaining\n                systematic class-based architecture",
+        "incorrect": "Added some functions to the script"
+      },
+      "rationale": "Comprehensive logging enables: cross-session continuity, contradiction prevention, architectural evolution tracking, medical software compliance documentation, and knowledge transfer between Claude instances."
+    },
+    {
+      "id": "thoughtful-decision-making",
+      "name": "Deliberate Analysis and Contradiction Prevention",
+      "priority": "critical",
+      "category": "reasoning",
+      "description": "Always spend time to thoroughly understand context before making decisions. Never make contradictory or rushed decisions. Validate against previous decisions and project constraints.",
+      "triggers": [
+        "any code modification request",
+        "feature implementation",
+        "refactoring operations",
+        "architecture decisions",
+        "configuration changes"
+      ],
+      "behavior": {
+        "required_analysis_steps": [
+          "STEP 1: Read conversation.log to understand decision history",
+          "STEP 2: Read relevant existing code to understand current state",
+          "STEP 3: Review claude_settings.json for applicable rules",
+          "STEP 4: Check CLAUDE.md for project architecture constraints",
+          "STEP 5: Identify all options and analyze tradeoffs systematically",
+          "STEP 6: Validate decision against previous ADRs and logged choices",
+          "STEP 7: Document reasoning before implementation",
+          "STEP 8: Implement with careful validation",
+          "STEP 9: Log outcome and verify no contradictions introduced"
+        ],
+        "contradiction_prevention": {
+          "before_any_change": [
+            "Have I read conversation.log for this session?",
+            "Do I understand all previous decisions in this area?",
+            "Does this contradict any existing ADRs?",
+            "Does this violate any rules in claude_settings.json?",
+            "Have I considered the systematic approach (class-based)?",
+            "Am I about to create a script when I should modify existing?",
+            "Does this preserve medical data safety?",
+            "Is this decision compatible with the data format?",
+            "Will this confuse future Claude instances?",
+            "Have I logged my reasoning?"
+          ],
+          "validation_gates": [
+            "Read before write: Always read existing code first",
+            "Rules compliance: Verify against all applicable rules",
+            "History check: Ensure no contradiction with logged decisions",
+            "Architecture alignment: Confirm systematic class-based approach",
+            "Documentation: Log decision with full reasoning"
+          ]
+        },
+        "time_investment": {
+          "analysis_phase": "Spend sufficient time understanding context (min 5-10 steps)",
+          "option_evaluation": "Consider multiple approaches, document tradeoffs",
+          "validation_phase": "Thoroughly validate against rules and history",
+          "documentation_phase": "Write comprehensive log entries with reasoning"
+        },
+        "prohibited_behaviors": [
+          "Making decisions without reading conversation.log",
+          "Implementing without understanding existing code",
+          "Rushing to solutions without analyzing alternatives",
+          "Contradicting previous logged decisions without justification",
+          "Skipping validation steps to move faster",
+          "Creating new patterns that conflict with established architecture",
+          "Ignoring rules in claude_settings.json",
+          "Making assumptions without verification"
+        ]
+      },
+      "validation": {
+        "pre_decision_checklist": [
+          "✓ Read conversation.log and understand decision history",
+          "✓ Read existing code and configuration files",
+          "✓ Identified which existing script/class should be modified",
+          "✓ Considered minimum 2-3 alternative approaches",
+          "✓ Analyzed tradeoffs for each option",
+          "✓ Validated against all applicable rules",
+          "✓ Checked for contradictions with past decisions",
+          "✓ Designed systematic class-based solution",
+          "✓ Prepared log entry documenting reasoning"
+        ],
+        "decision_quality_metrics": [
+          "Context understanding: Did I fully understand the current state?",
+          "Option analysis: Did I consider multiple approaches?",
+          "Tradeoff evaluation: Did I document pros/cons?",
+          "Rules compliance: Does this follow all applicable rules?",
+          "Consistency: Is this compatible with previous decisions?",
+          "Documentation: Is my reasoning clearly logged?",
+          "Sustainability: Will future instances understand this?"
+        ]
+      },
+      "rationale": "Thoughtful decision-making prevents technical debt, architectural inconsistency, and contradictory patterns. Taking time to understand context ensures systematic, maintainable solutions that align with project goals and previous decisions."
+    }
+  ],
+  "signal_processing": {
+    "description": "Advanced adaptive filtering and threshold configuration for hand pose tracking and gait analysis",
+    "smoothing_filters": {
+      "gaussian": {
+        "type": "gaussian_smoothing",
+        "description": "Blurs high-frequency jitter by averaging nearby frames with a bell-curve weighting",
+        "parameters": {
+          "kernel_size": "adaptive",
+          "sigma": "auto_calibrated"
+        },
+        "use_cases": ["general_smoothing", "noise_reduction"]
+      },
+      "adaptive_gaussian": {
+        "type": "adaptive_gaussian",
+        "description": "Automatically widens/narrows the Gaussian kernel based on local noise or motion speed",
+        "parameters": {
+          "kernel_range": [3, 15],
+          "adaptation_metric": "local_variance",
+          "speed_threshold": "dynamic"
+        },
+        "use_cases": ["variable_motion_speed", "adaptive_noise_handling"]
+      },
+      "moving_average": {
+        "type": "rolling_mean",
+        "description": "Simple local averaging to reduce jitter (can lag fast movements)",
+        "parameters": {
+          "window_size": "adaptive",
+          "min_window": 3,
+          "max_window": 15
+        },
+        "use_cases": ["simple_smoothing", "trend_extraction"]
+      },
+      "exponential_moving_average": {
+        "type": "ema",
+        "description": "Smooths with recency weighting; reacts faster than rolling mean",
+        "parameters": {
+          "alpha": "adaptive",
+          "alpha_range": [0.1, 0.9],
+          "adaptation_strategy": "motion_based"
+        },
+        "use_cases": ["real_time_smoothing", "fast_response"]
+      },
+      "adaptive_ema": {
+        "type": "adaptive_ema",
+        "description": "Changes the EMA alpha dynamically (more smoothing when noisy, less when motion is fast)",
+        "parameters": {
+          "alpha_noise_high": 0.3,
+          "alpha_noise_low": 0.7,
+          "noise_estimation": "rolling_std",
+          "motion_detection": "velocity_threshold"
+        },
+        "use_cases": ["variable_noise_conditions", "motion_preserving_smoothing"]
+      },
+      "savitzky_golay": {
+        "type": "savgol_filter",
+        "description": "Fits a local polynomial to preserve peaks/shape while smoothing noise",
+        "parameters": {
+          "window_length": "adaptive",
+          "polyorder": 3,
+          "deriv": 0
+        },
+        "use_cases": ["shape_preserving", "peak_detection_preprocessing"]
+      },
+      "adaptive_savitzky_golay": {
+        "type": "adaptive_savgol",
+        "description": "Selects window size from cadence/PSD or residual error to avoid over-smoothing events",
+        "parameters": {
+          "window_range": [5, 25],
+          "polyorder": 3,
+          "adaptation_metric": "residual_error",
+          "cadence_estimation": "auto"
+        },
+        "use_cases": ["event_preservation", "adaptive_smoothing"]
+      }
+    },
+    "frequency_filters": {
+      "butterworth": {
+        "type": "butterworth_lowpass",
+        "description": "Clean low-pass filter with flat response; removes jitter above cutoff frequency",
+        "parameters": {
+          "order": 4,
+          "cutoff_freq": "adaptive",
+          "sampling_rate": 30
+        },
+        "use_cases": ["clean_lowpass", "jitter_removal"]
+      },
+      "adaptive_butterworth": {
+        "type": "adaptive_butterworth",
+        "description": "Sets cutoff per trial from estimated motion frequency (e.g., step rate) + margin",
+        "parameters": {
+          "order": 4,
+          "cutoff_strategy": "motion_frequency_based",
+          "margin_multiplier": 1.5,
+          "frequency_estimation": "psd_peak"
+        },
+        "use_cases": ["motion_adaptive_filtering", "per_trial_optimization"]
+      },
+      "chebyshev": {
+        "type": "chebyshev_lowpass",
+        "description": "Sharper cutoff than Butterworth at the expense of ripple",
+        "parameters": {
+          "order": 4,
+          "ripple_db": 0.5,
+          "cutoff_freq": "adaptive"
+        },
+        "use_cases": ["sharp_cutoff_needed", "aggressive_filtering"]
+      },
+      "elliptic": {
+        "type": "elliptic_lowpass",
+        "description": "Steepest roll-off for a given order; best when you need aggressive denoising",
+        "parameters": {
+          "order": 4,
+          "passband_ripple_db": 0.5,
+          "stopband_attenuation_db": 40,
+          "cutoff_freq": "adaptive"
+        },
+        "use_cases": ["maximum_attenuation", "aggressive_denoising"]
+      },
+      "notch": {
+        "type": "notch_filter",
+        "description": "Removes a narrowband periodic artifact (e.g., camera/lighting frequency)",
+        "parameters": {
+          "notch_freq": "auto_detect",
+          "quality_factor": 30,
+          "common_frequencies": [50, 60, 120]
+        },
+        "use_cases": ["periodic_artifact_removal", "camera_frequency_removal"]
+      },
+      "wiener": {
+        "type": "wiener_filter",
+        "description": "Data-driven denoiser that estimates signal vs noise power automatically",
+        "parameters": {
+          "noise_estimation": "automatic",
+          "signal_estimation": "power_spectrum"
+        },
+        "use_cases": ["optimal_denoising", "automatic_adaptation"]
+      }
+    },
+    "advanced_denoising": {
+      "wavelet": {
+        "type": "wavelet_denoising",
+        "description": "Shrinks noisy coefficients while keeping sharp transitions (contacts, peaks)",
+        "parameters": {
+          "wavelet": "db4",
+          "level": "auto",
+          "threshold_method": "soft",
+          "threshold_scale": "adaptive"
+        },
+        "use_cases": ["edge_preserving", "multi_scale_denoising"]
+      },
+      "total_variation": {
+        "type": "tv_denoising",
+        "description": "Smooths noise but preserves real edges by penalizing abrupt oscillations",
+        "parameters": {
+          "weight": "adaptive",
+          "max_iterations": 100,
+          "convergence_tolerance": 1e-4
+        },
+        "use_cases": ["edge_preservation", "piecewise_smooth_signals"]
+      },
+      "loess": {
+        "type": "loess_lowess",
+        "description": "Locally weighted regression smoothing that adapts to slow trend changes",
+        "parameters": {
+          "frac": "adaptive",
+          "it": 3,
+          "delta": "auto"
+        },
+        "use_cases": ["trend_extraction", "local_smoothing"]
+      }
+    },
+    "outlier_detection": {
+      "median_filter": {
+        "type": "median_filter",
+        "description": "Kills impulse spikes ('teleports') by replacing with local median",
+        "parameters": {
+          "kernel_size": "adaptive",
+          "kernel_range": [3, 9]
+        },
+        "use_cases": ["spike_removal", "impulse_noise"]
+      },
+      "hampel_filter": {
+        "type": "hampel_filter",
+        "description": "Robust spike detector that flags/replaces outliers using rolling median/MAD",
+        "parameters": {
+          "window_size": "adaptive",
+          "n_sigma": 3,
+          "mad_scaling": 1.4826
+        },
+        "use_cases": ["robust_outlier_detection", "spike_removal"]
+      },
+      "mad_gating": {
+        "type": "mad_robust_zscore",
+        "description": "Rejects points where deviation exceeds k×MAD, resistant to outliers",
+        "parameters": {
+          "k_threshold": "adaptive",
+          "k_range": [2.5, 4.0],
+          "window_size": "adaptive"
+        },
+        "use_cases": ["outlier_gating", "robust_statistics"]
+      },
+      "iqr_gating": {
+        "type": "iqr_gating",
+        "description": "Drops values outside Q1−k·IQR to Q3+k·IQR using robust spread",
+        "parameters": {
+          "k_multiplier": "adaptive",
+          "k_range": [1.5, 3.0]
+        },
+        "use_cases": ["robust_outlier_removal", "distribution_based_gating"]
+      },
+      "derivative_zscore": {
+        "type": "derivative_zscore_gating",
+        "description": "Detects outliers by abnormal velocity/acceleration instead of position",
+        "parameters": {
+          "derivative_order": 1,
+          "z_threshold": "adaptive",
+          "window_size": "adaptive"
+        },
+        "use_cases": ["velocity_based_outlier_detection", "acceleration_gating"]
+      }
+    },
+    "physical_constraints": {
+      "velocity_clamp": {
+        "type": "dynamic_velocity_clamp",
+        "description": "Caps frame-to-frame motion using bounds learned from the trial's typical speed",
+        "parameters": {
+          "percentile_upper": 99,
+          "percentile_lower": 1,
+          "margin_factor": 1.5,
+          "learning_window": "full_trial"
+        },
+        "use_cases": ["physical_constraint_enforcement", "teleport_prevention"]
+      },
+      "acceleration_clamp": {
+        "type": "dynamic_acceleration_jerk_clamp",
+        "description": "Limits physically impossible acceleration/jerk inferred from the trial",
+        "parameters": {
+          "acceleration_percentile": 99,
+          "jerk_percentile": 99,
+          "margin_factor": 2.0
+        },
+        "use_cases": ["physics_based_filtering", "impossible_motion_removal"]
+      }
+    },
+    "state_estimation": {
+      "kalman": {
+        "type": "kalman_filter",
+        "description": "Model-based smoothing that handles noise and short dropouts",
+        "parameters": {
+          "motion_model": "constant_velocity",
+          "process_noise": "adaptive",
+          "measurement_noise": "adaptive"
+        },
+        "use_cases": ["predictive_tracking", "dropout_handling"]
+      },
+      "adaptive_kalman": {
+        "type": "adaptive_kalman",
+        "description": "Updates noise parameters online using residuals so it self-tunes per trial",
+        "parameters": {
+          "innovation_based_adaptation": true,
+          "adaptation_rate": 0.01,
+          "noise_floor": 1e-5
+        },
+        "use_cases": ["self_tuning_tracking", "online_adaptation"]
+      },
+      "rts_smoother": {
+        "type": "rauch_tung_striebel_smoother",
+        "description": "Offline pass that yields cleaner trajectories than forward-only Kalman",
+        "parameters": {
+          "forward_kalman": "adaptive",
+          "backward_pass": true
+        },
+        "use_cases": ["offline_optimal_smoothing", "trajectory_refinement"]
+      },
+      "particle_filter": {
+        "type": "particle_filter",
+        "description": "Nonlinear, robust tracking when motion is complex and measurements are unreliable",
+        "parameters": {
+          "num_particles": "adaptive",
+          "particle_range": [100, 1000],
+          "resampling_strategy": "systematic"
+        },
+        "use_cases": ["nonlinear_tracking", "robust_tracking"]
+      }
+    },
+    "confidence_handling": {
+      "visibility_weighting": {
+        "type": "confidence_weighting",
+        "description": "Trusts measurements less when MediaPipe visibility drops and leans on prediction",
+        "parameters": {
+          "confidence_threshold": "adaptive",
+          "weighting_function": "sigmoid",
+          "prediction_weight_max": 0.9
+        },
+        "use_cases": ["confidence_based_fusion", "occlusion_handling"]
+      },
+      "visibility_masking": {
+        "type": "visibility_threshold_masking",
+        "description": "Treats low-visibility frames as missing to prevent contaminating metrics",
+        "parameters": {
+          "visibility_threshold": "adaptive",
+          "threshold_range": [0.3, 0.7],
+          "interpolation_strategy": "shape_preserving"
+        },
+        "use_cases": ["occlusion_handling", "quality_gating"]
+      }
+    },
+    "interpolation": {
+      "linear_spline": {
+        "type": "interpolation",
+        "description": "Fills short missing segments smoothly before filtering/metric extraction",
+        "parameters": {
+          "method": "cubic_spline",
+          "max_gap": "adaptive",
+          "gap_threshold": 10
+        },
+        "use_cases": ["gap_filling", "continuity_restoration"]
+      },
+      "pchip": {
+        "type": "shape_preserving_interpolation",
+        "description": "Fills gaps without overshoot, preserving peaks and monotonicity",
+        "parameters": {
+          "method": "pchip",
+          "max_gap": "adaptive"
+        },
+        "use_cases": ["shape_preserving_gap_filling", "peak_preservation"]
+      }
+    },
+    "multi_view": {
+      "cross_view_consensus": {
+        "type": "cross_view_consensus_filter",
+        "description": "Uses agreement across synced cameras to down-weight a noisy view dynamically",
+        "parameters": {
+          "consensus_threshold": "adaptive",
+          "weight_adjustment": "variance_based",
+          "min_views": 2
+        },
+        "use_cases": ["multi_camera_fusion", "noise_rejection"]
+      }
+    },
+    "peak_detection": {
+      "dynamic_prominence": {
+        "type": "dynamic_prominence_peak_detection",
+        "description": "Sets peak prominence as a function of signal variance to avoid fixed thresholds",
+        "parameters": {
+          "prominence_scale": "adaptive",
+          "variance_multiplier": 1.5,
+          "min_prominence": "auto"
+        },
+        "use_cases": ["adaptive_peak_detection", "gait_event_detection"]
+      },
+      "adaptive_peak_distance": {
+        "type": "adaptive_peak_distance",
+        "description": "Enforces minimum peak spacing using estimated cadence/period rather than a constant",
+        "parameters": {
+          "cadence_estimation": "auto",
+          "spacing_multiplier": 0.7,
+          "method": "autocorrelation"
+        },
+        "use_cases": ["gait_cycle_detection", "periodic_event_detection"]
+      }
+    },
+    "baseline_correction": {
+      "drift_correction": {
+        "type": "baseline_drift_correction",
+        "description": "Removes slow drift via high-pass or detrending so thresholds don't creep over time",
+        "parameters": {
+          "method": "high_pass",
+          "cutoff_freq": "adaptive",
+          "detrend_order": 1
+        },
+        "use_cases": ["drift_removal", "baseline_stabilization"]
+      }
+    },
+    "adaptive_thresholds": {
+      "quantile_based": {
+        "type": "quantile_based_thresholds",
+        "description": "Sets thresholds using percentiles (e.g., 90th) so they scale with each trial's amplitude",
+        "parameters": {
+          "percentile": "adaptive",
+          "percentile_range": [75, 95],
+          "adaptation_window": "trial"
+        },
+        "use_cases": ["amplitude_adaptive_thresholds", "per_trial_calibration"]
+      },
+      "hysteresis": {
+        "type": "hysteresis_thresholding",
+        "description": "Uses separate enter/exit thresholds to prevent rapid on/off flicker near boundaries",
+        "parameters": {
+          "high_threshold": "adaptive",
+          "low_threshold": "adaptive",
+          "hysteresis_margin": 0.15
+        },
+        "use_cases": ["stable_state_detection", "flicker_prevention"]
+      }
+    },
+    "change_detection": {
+      "cusum_bocpd": {
+        "type": "change_point_detection",
+        "description": "Finds motion phase transitions by detecting shifts in mean/variance",
+        "parameters": {
+          "method": "cusum",
+          "threshold": "adaptive",
+          "drift": "auto",
+          "min_segment_length": 10
+        },
+        "use_cases": ["phase_transition_detection", "gait_phase_segmentation"]
+      }
+    }
+  },
+  "filter_pipelines": {
+    "description": "Pre-configured filter chains for different analysis scenarios",
+    "standard_pipeline": {
+      "description": "Balanced pipeline for general hand pose tracking",
+      "stages": [
+        "visibility_masking",
+        "median_filter",
+        "adaptive_gaussian",
+        "adaptive_kalman",
+        "rts_smoother"
+      ]
+    },
+    "aggressive_denoising": {
+      "description": "Heavy denoising for very noisy data",
+      "stages": [
+        "visibility_masking",
+        "hampel_filter",
+        "wavelet_denoising",
+        "adaptive_butterworth",
+        "rts_smoother"
+      ]
+    },
+    "shape_preserving": {
+      "description": "Maximum shape preservation for event detection",
+      "stages": [
+        "visibility_masking",
+        "median_filter",
+        "adaptive_savitzky_golay",
+        "total_variation",
+        "pchip_interpolation"
+      ]
+    },
+    "real_time_tracking": {
+      "description": "Low-latency filtering for real-time applications",
+      "stages": [
+        "visibility_weighting",
+        "adaptive_ema",
+        "adaptive_kalman"
+      ]
+    }
+  },
+  "enforcement": {
+    "mode": "strict",
+    "violation_handling": "warn_and_block",
+    "user_notification": "Always inform user when rule prevents an action",
+    "override_mechanism": "Explicit user confirmation with specific details required"
+  },
+  "development_workflow": {
+    "modification_pattern": [
+      "1. Read existing script to understand current structure",
+      "2. Identify appropriate class for new functionality",
+      "3. Design method signature and integration points",
+      "4. Implement using systematic class-based approach",
+      "5. Validate integration with existing code",
+      "6. Test with sample patient data"
+    ],
+    "code_standards": {
+      "python_version": "3.12.3",
+      "naming_conventions": {
+        "classes": "PascalCase",
+        "methods": "snake_case",
+        "constants": "UPPER_SNAKE_CASE",
+        "private": "_leading_underscore"
+      },
+      "documentation": [
+        "Docstrings for all classes and public methods",
+        "Type hints for function parameters and returns",
+        "Inline comments for complex logic only",
+        "Korean filename handling notes where applicable"
+      ],
+      "error_handling": [
+        "Graceful handling of missing or corrupted files",
+        "Informative error messages without exposing patient data",
+        "Validation before file operations",
+        "Proper exception types for different error scenarios"
+      ]
+    },
+    "testing_requirements": {
+      "unit_tests": "Required for all signal processing functions",
+      "integration_tests": "Required for complete pipelines",
+      "validation_datasets": "Test with known ground truth data",
+      "performance_benchmarks": "Track processing speed and accuracy"
+    }
+  },
+  "integration": {
+    "complements": [
+      "Project_PRD.md - Complete system architecture and implementation roadmap",
+      "SuperClaude Framework - Global behavioral rules and principles",
+      "RULES.md - Workspace hygiene and file organization principles"
+    ],
+    "cloud_platform": {
+      "provider": "Google Cloud Platform",
+      "services": [
+        "Google Kubernetes Engine (GKE) - Container orchestration",
+        "Cloud SQL PostgreSQL - Structured data storage",
+        "Google Cloud Storage - Video/CSV file storage",
+        "Memorystore Redis - Caching layer",
+        "Cloud Pub/Sub - Message queue",
+        "Cloud CDN - Content delivery",
+        "Cloud Armor - Security and DDoS protection"
+      ]
+    },
+    "dependencies": {
+      "backend_libraries": {
+        "python": [
+          "numpy",
+          "scipy",
+          "pandas",
+          "scikit-learn",
+          "opencv-python",
+          "mediapipe",
+          "matplotlib",
+          "pywavelets",
+          "fastapi",
+          "celery",
+          "google-cloud-storage",
+          "google-cloud-pubsub"
+        ],
+        "go": [
+          "gin-gonic/gin",
+          "golang-jwt/jwt",
+          "google.golang.org/cloud/storage"
+        ],
+        "nodejs": [
+          "express",
+          "apollo-server",
+          "socket.io",
+          "@google-cloud/storage"
+        ]
+      },
+      "frontend_libraries": [
+        "react",
+        "typescript",
+        "redux-toolkit",
+        "tailwindcss",
+        "recharts",
+        "video.js",
+        "socket.io-client"
+      ],
+      "mobile_libraries": [
+        "kotlin",
+        "jetpack-compose",
+        "room",
+        "retrofit",
+        "mediapipe",
+        "camerax"
+      ],
+      "optional_libraries": [
+        "statsmodels",
+        "filterpy",
+        "ruptures"
+      ]
+    }
+  }
+}
