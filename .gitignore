@@ -46,3 +46,6 @@ ziBVaucE/
 .project
 .settings/
 build/
+Web-Service/secrets/
+**/secrets/
+GCS key/
